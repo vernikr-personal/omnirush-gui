@@ -21,6 +21,18 @@ Failures are shown verbatim on the page, minus the `Error invoking remote method
 | Stable (the only public channel) | `https://github.com/omnirush-ai/omnirush-gui/releases/latest/download` | `latest-mac.yml`, `latest.yml` (Windows), `latest-linux.yml` |
 | Targeted recovery/rollback | `https://github.com/omnirush-ai/omnirush-gui/releases/download/v<version>` | same names |
 
+One macOS feed covers both architectures. electron-updater builds its macOS
+channel file name as `${channel}-mac.yml` with no architecture suffix (unlike
+Linux, where the suffix selects `latest-linux.yml` or `latest-linux-arm64.yml`),
+so `latest-mac.yml` lists the Apple Silicon **and** Intel artifacts and the
+running app picks its own: `MacUpdater` keeps the entries whose URL contains
+`arm64` on an Apple Silicon Mac and drops them elsewhere, and the app's own
+manifest reader selects the entry carrying `-<arch>-`. The two macOS build legs
+therefore upload their manifests as `latest-mac-arm64.yml` and
+`latest-mac-x64.yml`, and the `merge-mac-feed` job combines them into
+`latest-mac.yml` (`scripts/release/merge-mac-update-manifests.mjs`) before
+publish verifies the feed.
+
 There is no public Alpha feed. A persisted or requested "alpha" channel is normalized back to "stable" and the channel selector stays hidden. A custom distribution can enable an Alpha channel by shipping an https feed directory in its electron-builder `extraMetadata` as `omnirushAlphaUpdateFeedUrl` (development runs may set `OMNIRUSH_DESKTOP_ALPHA_UPDATE_FEED_URL`); the Cloud and Enterprise flavors keep their parallel `cloud*.yml` / `enterprise*.yml` manifests on the stable feed.
 
 ## What a release must contain
@@ -29,7 +41,8 @@ For each platform the release needs the installers **and** the electron-builder 
 
 | Platform | Installers | Manifest |
 | --- | --- | --- |
-| macOS Apple Silicon | `omnirush-mac-arm64-<version>.zip` (+`.blockmap`), `omnirush-mac-arm64-<version>.dmg` (+`.blockmap`) | `latest-mac.yml` |
+| macOS Apple Silicon | `omnirush-mac-arm64-<version>.zip` (+`.blockmap`), `omnirush-mac-arm64-<version>.dmg` (+`.blockmap`) | `latest-mac.yml` (shared with Intel) |
+| macOS Intel | `omnirush-mac-x64-<version>.zip` (+`.blockmap`), `omnirush-mac-x64-<version>.dmg` (+`.blockmap`) | `latest-mac.yml` (shared with Apple Silicon) |
 | Windows x64 | `omnirush-win-x64-<version>.exe` (+`.blockmap`) | `latest.yml` |
 | Linux x64 | `omnirush-linux-x86_64-<version>.AppImage`, `omnirush-linux-x64-<version>.tar.gz` | `latest-linux.yml` |
 
@@ -48,7 +61,7 @@ Squirrel.Mac, which electron-updater uses to swap the app bundle on macOS, only 
 
 The app therefore checks its own signature once at startup (`codesign -dv --verbose=2` on the bundle). When the bundle is not Developer ID signed the Updates page reports install mode `manual-dmg`:
 
-- "Download" fetches `omnirush-mac-arm64-<version>.dmg` from the same feed directory and verifies the `sha512` listed in `latest-mac.yml`.
+- "Download" fetches `omnirush-mac-<arch>-<version>.dmg` (`arm64` on Apple Silicon, `x64` on Intel) from the same feed directory and verifies the `sha512` listed in `latest-mac.yml`.
 - "Open installer" opens the verified DMG, shows "Installer opened. Drag omnirush.ai to Applications, replace the old copy, then reopen it." and quits the app after a short delay.
 
 Once releases are signed with a Developer ID (and notarized), the same code path detects the signature and uses the normal Squirrel in-place install and restart. Windows and Linux installs are in place regardless of signing.
