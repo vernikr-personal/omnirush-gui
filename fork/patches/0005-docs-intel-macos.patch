@@ -1,5 +1,5 @@
 diff --git a/README.md b/README.md
-index 1ff2ce7..7928196 100644
+index 1ff2ce7..9e2d768 100644
 --- a/README.md
 +++ b/README.md
 @@ -16,7 +16,7 @@
@@ -11,7 +11,18 @@ index 1ff2ce7..7928196 100644
      <img src="https://img.shields.io/badge/Linux-x64%20%7C%20arm64-FCC624?logo=linux&logoColor=black" alt="Linux" />
      <a href="https://github.com/omnirush-ai/omnirush-gui/stargazers"><img src="https://img.shields.io/github/stars/omnirush-ai/omnirush-gui?style=social" alt="Stars" /></a>
    </p>
-@@ -44,6 +44,7 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
+@@ -35,6 +35,10 @@ omnirush.ai is a desktop app for working with a coding agent on your own
+ projects. GPT 6 Astra is the default model; GPT 6.1 Sol and the other models in
+ your account's catalog are available from the model picker.
+ 
++## Why this fork
++
++The official release covers Apple Silicon Macs only — this fork keeps the same app installable on Intel Macs, so nobody has to replace working hardware to use it.
++
+ ## Download
+ 
+ Download the latest build from the
+@@ -44,6 +48,7 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
  | Platform | File |
  | --- | --- |
  | macOS, Apple Silicon | `omnirush-mac-arm64-<version>.dmg` (a `.zip` is also attached) |
@@ -19,7 +30,7 @@ index 1ff2ce7..7928196 100644
  | Linux x64, Debian/Ubuntu | `omnirush-linux-amd64-<version>.deb` |
  | Linux x64, Arch | `omnirush-linux-x64-<version>.pacman` |
  | Linux x64, Fedora/RHEL | `omnirush-linux-x86_64-<version>.rpm` |
-@@ -53,8 +54,9 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
+@@ -53,8 +58,9 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
  | Linux arm64, Fedora/RHEL | `omnirush-linux-aarch64-<version>.rpm` |
  | Linux arm64, other | `omnirush-linux-arm64-<version>.AppImage` or `omnirush-linux-arm64-<version>.tar.gz` |
  

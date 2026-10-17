@@ -35,6 +35,10 @@ omnirush.ai is a desktop app for working with a coding agent on your own
 projects. GPT 6 Astra is the default model; GPT 6.1 Sol and the other models in
 your account's catalog are available from the model picker.
 
+## Why this fork
+
+The official release covers Apple Silicon Macs only — this fork keeps the same app installable on Intel Macs, so nobody has to replace working hardware to use it.
+
 ## Download
 
 Download the latest build from the
