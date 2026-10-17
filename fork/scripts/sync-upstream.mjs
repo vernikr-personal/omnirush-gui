@@ -16,7 +16,7 @@
  * Writes `changed`, `upstream`, `base`, `head` and `dry_run` to $GITHUB_OUTPUT
  * when it runs in Actions.
  */
-import { appendFileSync, cpSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PATCH_GROUPS } from "./lib/patch-groups.mjs";
@@ -109,6 +109,16 @@ export function syncUpstream(options, io = {}) {
       }
       applied.push(name);
       log(`applied ${patchPath}`);
+    }
+
+    // A patch cannot contain itself, so the kit patch carries the previous
+    // generation of these files. Put back the copies that were just applied:
+    // then the branch holds the current generation and the next sync is a
+    // no-op instead of walking the kit backwards one generation per run.
+    const patchesDir = join(root, "fork", "patches");
+    if (existsSync(patchesDir)) {
+      for (const name of names) cpSync(join(stagingDir, name), join(patchesDir, name));
+      git(["add", "--", "fork/patches"], cwd);
     }
 
     // 4. One commit that records what it is built on.

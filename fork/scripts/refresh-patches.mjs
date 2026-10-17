@@ -22,6 +22,11 @@ export function refreshPatches({ root = process.cwd(), base, log = console.log }
   if (!target) {
     throw new Error("No base commit: pass --base <upstream-sha> or commit with an Upstream-Commit trailer.");
   }
+  // The base goes on disk before the diffs are taken: fork/UPSTREAM_BASE is
+  // itself part of the port, and writing it afterwards would leave the patches
+  // one generation behind the tree they were generated from.
+  writeFileSync(resolve(root, "fork/UPSTREAM_BASE"), `${target}\n`, "utf8");
+
   const written = [];
   for (const group of PATCH_GROUPS) {
     const diff = execFileSync(
@@ -39,7 +44,6 @@ export function refreshPatches({ root = process.cwd(), base, log = console.log }
     written.push(group.file);
     log(`wrote fork/patches/${group.file} (${group.title})`);
   }
-  writeFileSync(resolve(root, "fork/UPSTREAM_BASE"), `${target}\n`, "utf8");
   log(`base recorded in fork/UPSTREAM_BASE: ${target}`);
   return { base: target, written };
 }

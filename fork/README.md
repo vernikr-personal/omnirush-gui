@@ -39,7 +39,25 @@ fork/
    one upstream uses, with a second macOS leg.
 
 Run it by hand from Actions → **Sync upstream and release** → *Run workflow*.
-`mode: check` syncs and verifies without publishing.
+`mode: check` syncs and verifies without publishing a release (it still pushes
+the rebuilt branch, so `main` always tracks upstream plus the port).
+
+Every step is a plain script, so the whole chain can be reproduced locally:
+
+```bash
+node fork/scripts/sync-upstream.mjs --upstream omnirush-ai/omnirush-gui --dry-run
+node fork/scripts/verify-port.mjs --repo vernikr-personal/omnirush-gui --run-tests
+node --test fork/tests/
+node fork/scripts/next-version.mjs --repo vernikr-personal/omnirush-gui --published 3.6.0 --upstream 3.5.3
+```
+
+### Patches that contain patches
+
+`0001-port-kit.patch` also carries the files in `fork/patches`, and a file
+cannot contain itself: the copy inside it is one generation older than the file
+itself. `sync-upstream.mjs` writes back the exact copies it applied, so the
+branch holds the current generation and running the sync twice changes nothing
+(`changed=false` on the second run).
 
 ### Why `main` is force-pushed
 
