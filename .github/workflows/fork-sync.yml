@@ -22,8 +22,9 @@ on:
         default: false
 
 permissions:
-  contents: write
-  issues: write
+  actions: write        # start the Desktop Release workflow after tagging
+  contents: write       # push the rebuilt branch and the tag
+  issues: write         # report a port that stopped applying
 
 concurrency:
   group: fork-sync
@@ -96,6 +97,8 @@ jobs:
             # the tag goes in with a PAT when one is configured.
             git push "https://x-access-token:${FORK_SYNC_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$tag"
           else
+            # GITHUB_TOKEN cannot start a workflow by pushing, so the release
+            # build is dispatched explicitly (needs the actions: write scope).
             git push origin "$tag"
             gh workflow run "Desktop Release" --repo "$GITHUB_REPOSITORY" --ref main -f tag="$tag"
           fi
