@@ -42,6 +42,28 @@ export const PATCH_GROUPS = [
     paths: ["README.md", "docs/updates.md", "RELEASING.md", "docs/intel-mac-plan.md"],
     addsOnly: false,
   },
+  {
+    file: "0006-thinking-stream-render-cost.patch",
+    title: "a reasoning trace stops re-rendering itself as markdown on every frame",
+    paths: [
+      "apps/app/src/components/chat/reasoning-block.tsx",
+      "apps/app/src/components/markdown",
+      "apps/app/src/react-app/domains/session/status/session-progress.ts",
+      "apps/app/tests/reasoning-block-collapsed.test.tsx",
+      "apps/app/tests/session-progress-fingerprint.test.ts",
+      "docs/intel-mac-performance.md",
+    ],
+    addsOnly: false,
+  },
+  {
+    file: "0007-mac-pane-blur-on-intel.patch",
+    title: "the session pane drops its window-sized backdrop blur on Intel Macs",
+    paths: [
+      "apps/app/src/app/index.css",
+      "apps/app/src/react-app/domains/session/chat/session-page.tsx",
+    ],
+    addsOnly: false,
+  },
 ];
 
 /** Paths no group may touch: the engine tarballs are pinned in upstream releases. */

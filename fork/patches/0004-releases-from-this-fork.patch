@@ -15,6 +15,23 @@ index f41b1df..9509828 100644
  const applicationMenu = createApplicationMenu({
    appName: DISPLAY_APP_NAME,
    docsUrl: DOCS_PAGE_URL,
+diff --git a/apps/desktop/electron/preload.mjs b/apps/desktop/electron/preload.mjs
+index e2aa256..27a7391 100644
+--- a/apps/desktop/electron/preload.mjs
++++ b/apps/desktop/electron/preload.mjs
+@@ -23,6 +23,12 @@ function applyShellDocumentMarkers() {
+     root.classList.add("omnirush-electron");
+     if (process.platform === "darwin") {
+       root.classList.add("omnirush-platform-mac");
++      // This fork ships an Intel build next to upstream's Apple Silicon one, and
++      // some window-sized effects are priced for an Apple GPU. The stylesheet
++      // keys those decisions off the architecture of the running binary.
++      if (process.arch === "x64") {
++        root.classList.add("omnirush-platform-mac-intel");
++      }
+     } else if (process.platform === "win32") {
+       root.classList.add("omnirush-platform-windows");
+     } else if (process.platform === "linux") {
 diff --git a/apps/desktop/electron/recovery.mjs b/apps/desktop/electron/recovery.mjs
 index 3b7906a..aef33b6 100644
 --- a/apps/desktop/electron/recovery.mjs
