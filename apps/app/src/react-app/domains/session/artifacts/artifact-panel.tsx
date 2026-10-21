@@ -524,7 +524,12 @@ function ArtifactPanelView({ sessionId, client, workspaceId, workspaceRoot, isRe
         ) : data?.kind === "text" && (editing || isDirectTextEdit) ? (
           <TextEditor value={draft} language={target.preview === "markdown" ? "markdown" : "text"} onChange={setDraft} />
         ) : target.preview === "markdown" && data?.kind === "text" ? (
-          <MarkdownPreview content={data.data} mermaidSource={isMermaidArtifact} />
+          <MarkdownPreview
+            content={data.data}
+            mermaidSource={isMermaidArtifact}
+            path={target.kind === "file" ? target.value : undefined}
+            onOpenFile={(opened) => omniRushspaceFile({ path: opened, size: 0, mtimeMs: 0 })}
+          />
         ) : target.preview === "code" && data?.kind === "text" ? (
           <Suspense fallback={<PreviewLoading />}>
             <ArtifactCodeView

@@ -80,6 +80,8 @@ export const PATCH_GROUPS = [
       "apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx",
       "apps/app/src/react-app/domains/session/artifacts/artifact-panel.css",
       "apps/app/src/react-app/domains/session/artifacts/artifact-find.ts",
+      "apps/app/src/react-app/domains/session/artifacts/preview.tsx",
+      "apps/app/src/react-app/domains/session/markdown-anchor.ts",
       "apps/app/src/react-app/domains/session/editor/editor-panel.tsx",
       "apps/app/src/react-app/domains/session/editor/editor-surface.tsx",
       "apps/app/src/react-app/domains/session/editor/editor.css",

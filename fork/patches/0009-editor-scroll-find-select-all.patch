@@ -114,7 +114,7 @@ index 00000000..75204d3d
 +  color: inherit;
 +}
 diff --git a/apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx b/apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx
-index 738adbc6..66dfb729 100644
+index 738adbc6..35c06e31 100644
 --- a/apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx
 +++ b/apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx
 @@ -1,7 +1,7 @@
@@ -310,6 +310,159 @@ index 738adbc6..66dfb729 100644
            {isLoading || (data?.kind === "binary" && !binaryObjectUrl) ? (
            <PreviewLoading />
          ) : isError ? (
+@@ -407,7 +524,12 @@ function ArtifactPanelView({ sessionId, client, workspaceId, workspaceRoot, isRe
+         ) : data?.kind === "text" && (editing || isDirectTextEdit) ? (
+           <TextEditor value={draft} language={target.preview === "markdown" ? "markdown" : "text"} onChange={setDraft} />
+         ) : target.preview === "markdown" && data?.kind === "text" ? (
+-          <MarkdownPreview content={data.data} mermaidSource={isMermaidArtifact} />
++          <MarkdownPreview
++            content={data.data}
++            mermaidSource={isMermaidArtifact}
++            path={target.kind === "file" ? target.value : undefined}
++            onOpenFile={(opened) => omniRushspaceFile({ path: opened, size: 0, mtimeMs: 0 })}
++          />
+         ) : target.preview === "code" && data?.kind === "text" ? (
+           <Suspense fallback={<PreviewLoading />}>
+             <ArtifactCodeView
+diff --git a/apps/app/src/react-app/domains/session/artifacts/preview.tsx b/apps/app/src/react-app/domains/session/artifacts/preview.tsx
+index 0bce6f5d..3691eb5f 100644
+--- a/apps/app/src/react-app/domains/session/artifacts/preview.tsx
++++ b/apps/app/src/react-app/domains/session/artifacts/preview.tsx
+@@ -1,8 +1,11 @@
+ /** @jsxImportSource react */
++import { useRef } from "react";
+ import type * as React from "react";
+ import { Loader2 } from "lucide-react";
+ 
+ import { cn } from "@/lib/utils";
++import { resolveProjectPath } from "../editor/markdown-preview";
++import { findMarkdownHeading } from "../markdown-anchor";
+ import { MarkdownBlock } from "../surface/markdown";
+ 
+ interface PreviewLoadingProps extends React.ComponentProps<"div"> {}
+@@ -34,6 +37,9 @@ export function PlainText({ content, className, ...props }: PlainTextProps) {
+ interface MarkdownPreviewProps extends React.ComponentProps<"div"> {
+   content: string;
+   mermaidSource?: boolean;
++  /** Project path of the rendered file, so relative links resolve against its folder. */
++  path?: string;
++  onOpenFile?: (path: string) => void;
+ }
+ 
+ function mermaidSourceMarkdown(content: string) {
+@@ -47,9 +53,36 @@ function mermaidSourceMarkdown(content: string) {
+   return `${fence}mermaid\n${content}\n${fence}`;
+ }
+ 
+-export function MarkdownPreview({ content, mermaidSource = false, className, ...props }: MarkdownPreviewProps) {
++export function MarkdownPreview({ content, mermaidSource = false, path, onOpenFile, className, ...props }: MarkdownPreviewProps) {
++  const rootRef = useRef<HTMLDivElement | null>(null);
++
++  const onClick = (event: React.MouseEvent<HTMLDivElement>) => {
++    const anchor = (event.target as HTMLElement).closest("a");
++    if (!anchor) return;
++    const href = anchor.getAttribute("href") ?? "";
++    if (href.startsWith("#") && href.length > 1) {
++      // In-document anchor: the renderer marks every link external, so scroll this preview instead of opening a window.
++      event.preventDefault();
++      findMarkdownHeading(rootRef.current, href.slice(1))?.scrollIntoView({ block: "start" });
++      return;
++    }
++    if (!path || !onOpenFile) return;
++    if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) return;
++    const target = resolveProjectPath(path, href);
++    if (!target) return;
++    event.preventDefault();
++    onOpenFile(target);
++  };
++
+   return (
+-    <div data-omnirush-markdown-preview="" data-omnirush-mermaid-artifact={mermaidSource ? "" : undefined} className={cn("h-full overflow-auto p-4", className)} {...props}>
++    <div
++      ref={rootRef}
++      onClick={onClick}
++      data-omnirush-markdown-preview=""
++      data-omnirush-mermaid-artifact={mermaidSource ? "" : undefined}
++      className={cn("h-full overflow-auto p-4", className)}
++      {...props}
++    >
+       <MarkdownBlock text={mermaidSource ? mermaidSourceMarkdown(content) : content} />
+     </div>
+   );
+diff --git a/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx b/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
+index 769a889e..7b78f7fe 100644
+--- a/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
++++ b/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
+@@ -10,6 +10,7 @@ import type * as MonacoApi from "monaco-editor/editor/editor.api.js";
+ 
+ import type { OmniRushServerClient } from "@/app/lib/omnirush-server";
+ import { renderMarkdownHtml } from "@/components/markdown/markdown";
++import { findMarkdownHeading } from "../markdown-anchor";
+ import { isImagePath } from "./image-view";
+ 
+ const LARGE = 1_000_000;
+@@ -141,10 +142,7 @@ export function MarkdownPreview(props: {
+     const href = anchor.getAttribute("href") ?? "";
+     const inline = anchor.getAttribute("data-omnirush-inline-code-path");
+     if (href.startsWith("#") && href.length > 1) {
+-      const id = decodeURIComponent(href.slice(1));
+-      const heading = rootRef.current?.querySelector(`[id="${CSS.escape(id)}"]`)
+-        ?? Array.from(rootRef.current?.querySelectorAll("h1,h2,h3,h4,h5,h6") ?? []).find((element) => slug(element.textContent ?? "") === id);
+-      heading?.scrollIntoView({ block: "start" });
++      findMarkdownHeading(rootRef.current, href.slice(1))?.scrollIntoView({ block: "start" });
+       return;
+     }
+     if (/^https?:\/\//i.test(href)) {
+@@ -166,8 +164,3 @@ export function MarkdownPreview(props: {
+     </div>
+   );
+ }
+-
+-/** GitHub-style heading anchor. */
+-function slug(text: string): string {
+-  return text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
+-}
+diff --git a/apps/app/src/react-app/domains/session/markdown-anchor.ts b/apps/app/src/react-app/domains/session/markdown-anchor.ts
+new file mode 100644
+index 00000000..57cf461a
+--- /dev/null
++++ b/apps/app/src/react-app/domains/session/markdown-anchor.ts
+@@ -0,0 +1,35 @@
++/**
++ * In-document markdown anchors. The markdown renderer emits headings without
++ * `id` attributes and marks every link external (`target="_blank"`), so a
++ * `#table-of-contents` link would open a dead window instead of scrolling the
++ * document. Preview surfaces resolve those clicks themselves through this
++ * helper: by `id` when one exists, otherwise by the GitHub-style slug of the
++ * heading text, the same way GitHub resolves document anchors.
++ */
++
++/** GitHub-style heading anchor. */
++export function markdownHeadingSlug(text: string): string {
++  return text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-");
++}
++
++function decodeAnchorHash(hash: string): string {
++  try {
++    return decodeURIComponent(hash);
++  } catch {
++    // A stray `%` in a hand-written anchor is its literal text, not an escape.
++    return hash;
++  }
++}
++
++/** The heading an in-document `#anchor` points at, or null when the document has none. */
++export function findMarkdownHeading(root: ParentNode | null | undefined, hash: string): Element | null {
++  if (!root) return null;
++  const id = decodeAnchorHash(hash);
++  const byId = root.querySelector(`[id="${CSS.escape(id)}"]`);
++  if (byId) return byId;
++  return (
++    Array.from(root.querySelectorAll("h1,h2,h3,h4,h5,h6")).find(
++      (element) => markdownHeadingSlug(element.textContent ?? "") === id,
++    ) ?? null
++  );
++}
 diff --git a/apps/app/src/react-app/domains/session/surface/composer/composer.tsx b/apps/app/src/react-app/domains/session/surface/composer/composer.tsx
 index 76a2ff62..87d9617f 100644
 --- a/apps/app/src/react-app/domains/session/surface/composer/composer.tsx

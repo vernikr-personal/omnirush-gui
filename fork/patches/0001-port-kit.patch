@@ -3568,10 +3568,10 @@ index 00000000..df604348
 +}
 diff --git a/fork/scripts/lib/patch-groups.mjs b/fork/scripts/lib/patch-groups.mjs
 new file mode 100644
-index 00000000..e98e0c2a
+index 00000000..357d268a
 --- /dev/null
 +++ b/fork/scripts/lib/patch-groups.mjs
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,114 @@
 +// The port, split into patch files. Each group is a set of paths whose diff
 +// against upstream is stored under fork/patches; keeping them apart makes a
 +// conflict easy to locate ("0003 no longer applies" is one file, not five).
@@ -3654,6 +3654,8 @@ index 00000000..e98e0c2a
 +      "apps/app/src/react-app/domains/session/artifacts/artifact-panel.tsx",
 +      "apps/app/src/react-app/domains/session/artifacts/artifact-panel.css",
 +      "apps/app/src/react-app/domains/session/artifacts/artifact-find.ts",
++      "apps/app/src/react-app/domains/session/artifacts/preview.tsx",
++      "apps/app/src/react-app/domains/session/markdown-anchor.ts",
 +      "apps/app/src/react-app/domains/session/editor/editor-panel.tsx",
 +      "apps/app/src/react-app/domains/session/editor/editor-surface.tsx",
 +      "apps/app/src/react-app/domains/session/editor/editor.css",

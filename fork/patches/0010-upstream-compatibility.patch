@@ -14,10 +14,10 @@ index 82a42408..0add8d71 100644
 +Fork difference registry: `FORK_DIFFS.md`. Keep updated.
 diff --git a/FORK_DIFFS.md b/FORK_DIFFS.md
 new file mode 100644
-index 00000000..3c91e450
+index 00000000..c15dd295
 --- /dev/null
 +++ b/FORK_DIFFS.md
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,10 @@
 +# Fork differences
 +
 +Compared with `omnirush-ai/omnirush-gui`:
@@ -27,3 +27,4 @@ index 00000000..3c91e450
 +- Reasoning/streaming render and transcript-progress performance optimizations; reduced Intel window blur.
 +- Find in artifact previews; prompt Select All excludes attachment chips; editor scroll position is preserved.
 +- Markdown code blocks follow dark/custom themes; desktop cleanup uses fork retention policy.
++- Internal links are clickable in artifact previews: `#anchor` scrolls the document, a relative link opens the file in the panel.
