@@ -1,0 +1,1004 @@
+diff --git a/apps/app/src/react-app/domains/session/editor/editor-panel.tsx b/apps/app/src/react-app/domains/session/editor/editor-panel.tsx
+index b41c2a9a..11dd1642 100644
+--- a/apps/app/src/react-app/domains/session/editor/editor-panel.tsx
++++ b/apps/app/src/react-app/domains/session/editor/editor-panel.tsx
+@@ -571,6 +571,13 @@ export default function EditorPanel(props: EditorPanelProps) {
+   const [surfaceReady, setSurfaceReady] = useState(false);
+   const pendingReveal = useRef<{ path: string; line: number; column: number; endColumn?: number } | null>(null);
+   const [searchFocus, setSearchFocus] = useState(0);
++  const [documentFindOpen, setDocumentFindOpen] = useState(false);
++  const [documentFindQuery, setDocumentFindQuery] = useState("");
++  const [documentFindIndex, setDocumentFindIndex] = useState(0);
++  const [documentFindCount, setDocumentFindCount] = useState(0);
++  const [documentFindGroup, setDocumentFindGroup] = useState<1 | 2>(1);
++  const [documentFindFocus, setDocumentFindFocus] = useState(0);
++  const documentFindInputRef = useRef<HTMLInputElement | null>(null);
+   const [problemsLoading, setProblemsLoading] = useState(false);
+   const [breadcrumbSymbols, setBreadcrumbSymbols] = useState<string[]>([]);
+   const problemsOpen = useEditorStore((store) => store.problemsOpen);
+@@ -1233,6 +1240,97 @@ export default function EditorPanel(props: EditorPanelProps) {
+       cancelled = true;
+     };
+   }, [docs, group2Tab, docsTick]);
++
++  const previewFindCount = useCallback((count: number) => {
++    setDocumentFindCount(count);
++    setDocumentFindIndex((index) => count > 0 ? Math.min(index, count - 1) : 0);
++  }, []);
++
++  useEffect(() => {
++    if (!documentFindOpen) {
++      setDocumentFindCount(0);
++      return;
++    }
++    const preview = documentFindGroup === 2 ? group2Tab?.kind === "preview" : surface?.kind === "preview";
++    const editor = documentFindGroup === 2 ? group2EditorRef.current : surfaceHandle.current?.activeEditor();
++    const model = documentFindGroup === 2
++      ? group2Doc?.model
++      : surface?.kind === "file" ? surface.doc.model : surface?.kind === "diff" ? surface.modified : null;
++    if (preview) return;
++    if (!editor || !model || !documentFindQuery.trim()) {
++      setDocumentFindCount(0);
++      return;
++    }
++    const matches = model.findMatches(documentFindQuery, false, false, false, null, true);
++    const activeIndex = matches.length ? ((documentFindIndex % matches.length) + matches.length) % matches.length : 0;
++    const decorations = matches.map((match, index) => ({
++      range: match.range,
++      options: {
++        inlineClassName: index === activeIndex ? "omnirush-document-find-active" : "omnirush-document-find-match",
++        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
++      },
++    }));
++    const decorationIds = editor.deltaDecorations([], decorations);
++    setDocumentFindCount(matches.length);
++    if (matches.length) {
++      const range = matches[activeIndex]!.range;
++      editor.setSelection(range);
++      editor.revealRangeInCenterIfOutsideViewport(range);
++    }
++    return () => {
++      editor.deltaDecorations(decorationIds, []);
++    };
++  }, [documentFindGroup, documentFindIndex, documentFindOpen, documentFindQuery, group2Doc, group2Ready, group2Tab, monaco, surface, surfaceReady]);
++
++  useEffect(() => {
++    if (!documentFindOpen) return;
++    const frame = requestAnimationFrame(() => {
++      documentFindInputRef.current?.focus();
++      documentFindInputRef.current?.select();
++    });
++    return () => cancelAnimationFrame(frame);
++  }, [documentFindFocus, documentFindOpen]);
++
++  const openDocumentFind = useCallback((group: 1 | 2) => {
++    if (group === 2 && !group2Tab) return;
++    useEditorStore.getState().setFocusedGroup(group);
++    setDocumentFindGroup(group);
++    setDocumentFindIndex(0);
++    setDocumentFindOpen(true);
++    setDocumentFindFocus((value) => value + 1);
++  }, [group2Tab]);
++
++  useEffect(() => {
++    const onKeyDown = (event: KeyboardEvent) => {
++      if (event.defaultPrevented) return;
++      const target = event.target instanceof Element ? event.target : null;
++      const insideDocument = Boolean(target?.closest("[data-editor-document-surface]"));
++      const insideFindBar = Boolean(target?.closest("[data-editor-document-find]"));
++      if (!insideDocument && !insideFindBar) return;
++      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
++      const mod = isMac ? event.metaKey : event.ctrlKey;
++      if (!mod || event.shiftKey || event.altKey || event.key.toLowerCase() !== "f") return;
++      // Intercept before Monaco and the chat's conversation-find listener.
++      // Cmd/Ctrl+Shift+F remains the project-wide search shortcut.
++      event.preventDefault();
++      event.stopPropagation();
++      event.stopImmediatePropagation();
++      const group = target?.closest("[data-editor-group='2']")
++        ? 2
++        : insideDocument ? 1 : focusedGroup === 2 && group2Tab ? 2 : 1;
++      openDocumentFind(group);
++    };
++    window.addEventListener("keydown", onKeyDown, true);
++    return () => window.removeEventListener("keydown", onKeyDown, true);
++  }, [focusedGroup, group2Tab, openDocumentFind]);
++
++  const moveDocumentFind = (direction: 1 | -1) => {
++    if (!documentFindCount) return;
++    setDocumentFindIndex((index) => (index + direction + documentFindCount) % documentFindCount);
++  };
++
++  const closeDocumentFind = () => setDocumentFindOpen(false);
++
+   // The git gutter in group 2 too.
+   useEffect(() => {
+     const editor = group2EditorRef.current;
+@@ -1556,6 +1654,15 @@ export default function EditorPanel(props: EditorPanelProps) {
+           <TooltipContent>Open preview to the side ({mac ? "⌘⇧V" : "Ctrl+Shift+V"})</TooltipContent>
+         </Tooltip>
+       ) : null}
++      {focusedTab ? (
++        <Tooltip>
++          <TooltipTrigger render={<Button variant="ghost" size="icon-xs" aria-label="Find in document" data-editor-document-find-trigger onClick={(event) => {
++            const group = event.currentTarget.closest("[data-editor-group='2']") ? 2 : 1;
++            openDocumentFind(group);
++          }}><Search /></Button>} />
++          <TooltipContent>Find in document ({mac ? "⌘F" : "Ctrl+F"})</TooltipContent>
++        </Tooltip>
++      ) : null}
+       <Tooltip>
+         <TooltipTrigger
+           render={(
+@@ -1631,6 +1738,7 @@ export default function EditorPanel(props: EditorPanelProps) {
+           <div className={cn("flex min-h-0 min-w-0 flex-1", (surface?.kind === "preview" || surface?.kind === "image") && "hidden")}>
+           <EditorSurface
+             monaco={monaco}
++            workspaceId={workspaceId}
+             surface={surface && (surface.kind === "file" || surface.kind === "diff") ? surface : null}
+             onSave={() => void save()}
+             onCursor={setCursor}
+@@ -1647,9 +1755,13 @@ export default function EditorPanel(props: EditorPanelProps) {
+             <MarkdownPreview
+               client={client}
+               workspaceId={workspaceId}
++              group={1}
+               path={surface.doc.path}
+               model={surface.doc.model}
+               isDirty={() => docs.isDirty(surface.doc)}
++              findQuery={documentFindOpen && documentFindGroup === 1 ? documentFindQuery : ""}
++              activeMatchIndex={documentFindIndex}
++              onFindMatches={documentFindOpen && documentFindGroup === 1 ? previewFindCount : undefined}
+               onOpenFile={openFile}
+               onOpenExternal={(url) => void openDesktopUrl(url).catch(() => toast.error("Could not open the link."))}
+             />
+@@ -1694,6 +1806,8 @@ export default function EditorPanel(props: EditorPanelProps) {
+       <div className={cn("flex min-h-0 flex-1", (group2Error || group2Tab?.kind !== "file" || isImagePath(group2Tab.path)) && "hidden")}>
+         <Group2Editor
+           monaco={monaco}
++          workspaceId={workspaceId}
++          stateKey={group2Tab?.kind === "file" && !isImagePath(group2Tab.path) ? group2Tab.id : null}
+           model={group2Tab?.kind === "file" && group2Doc?.path === group2Tab.path ? group2Doc.model : null}
+           onSave={() => {
+             if (group2Tab) void saveFile(group2Tab.path, "manual");
+@@ -1712,9 +1826,13 @@ export default function EditorPanel(props: EditorPanelProps) {
+         <MarkdownPreview
+           client={client}
+           workspaceId={workspaceId}
++          group={2}
+           path={group2Doc.path}
+           model={group2Doc.model}
+           isDirty={() => docs.isDirty(group2Doc)}
++          findQuery={documentFindOpen && documentFindGroup === 2 ? documentFindQuery : ""}
++          activeMatchIndex={documentFindIndex}
++          onFindMatches={documentFindOpen && documentFindGroup === 2 ? previewFindCount : undefined}
+           onOpenFile={(path) => useEditorStore.getState().openTab2(workspaceId, { id: tabId({ kind: "file", path }), kind: "file", path })}
+           onOpenExternal={(url) => void openDesktopUrl(url).catch(() => toast.error("Could not open the link."))}
+         />
+@@ -1794,7 +1912,12 @@ export default function EditorPanel(props: EditorPanelProps) {
+   };
+ 
+   return (
+-    <div ref={panelRef} className="relative flex h-full min-h-0 bg-background" data-editor-panel data-editor-layout="ide">
++    <div
++      ref={panelRef}
++      className="relative flex h-full min-h-0 bg-background"
++      data-editor-panel
++      data-editor-layout="ide"
++    >
+       {/* The activity rail: the side views, quick open, and the app's own destinations at its foot. */}
+       <nav aria-label="Editor views" className="flex w-12 shrink-0 flex-col items-center gap-1 border-e border-border py-2 mac:pt-10" data-editor-rail-views>
+         {railItem("files", "Files", <Files />, mac ? "⌘⇧E" : "Ctrl+Shift+E")}
+@@ -1946,6 +2069,48 @@ export default function EditorPanel(props: EditorPanelProps) {
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
++      {documentFindOpen ? (
++        <div
++          className="absolute right-3 top-11 z-40 flex h-9 w-[min(28rem,calc(100%-4.5rem))] items-center gap-1 rounded-lg border border-border bg-popover px-1.5 text-xs text-popover-foreground shadow-lg"
++          data-editor-document-find
++          role="search"
++          aria-label="Find in document"
++        >
++          <Search className="ms-1 size-3.5 shrink-0 text-muted-foreground" />
++          <input
++            ref={documentFindInputRef}
++            value={documentFindQuery}
++            onChange={(event) => {
++              setDocumentFindQuery(event.target.value);
++              setDocumentFindIndex(0);
++            }}
++            onKeyDown={(event) => {
++              if (event.key === "Enter") {
++                event.preventDefault();
++                moveDocumentFind(event.shiftKey ? -1 : 1);
++              } else if (event.key === "Escape") {
++                event.preventDefault();
++                closeDocumentFind();
++              }
++            }}
++            placeholder="Find in document"
++            aria-label="Find in document"
++            className="h-7 min-w-0 flex-1 bg-transparent px-1 outline-none placeholder:text-muted-foreground"
++          />
++          <span className="min-w-12 text-center tabular-nums text-muted-foreground" aria-live="polite">
++            {documentFindCount ? `${Math.min(documentFindIndex + 1, documentFindCount)} of ${documentFindCount}` : "0 of 0"}
++          </span>
++          <Button variant="ghost" size="icon-xs" aria-label="Previous match" disabled={!documentFindCount} onClick={() => moveDocumentFind(-1)}>
++            <ChevronUp />
++          </Button>
++          <Button variant="ghost" size="icon-xs" aria-label="Next match" disabled={!documentFindCount} onClick={() => moveDocumentFind(1)}>
++            <ChevronDown />
++          </Button>
++          <Button variant="ghost" size="icon-xs" aria-label="Close document search" onClick={closeDocumentFind}>
++            <X />
++          </Button>
++        </div>
++      ) : null}
+       {quickOpen ? (
+         <QuickOpen
+           files={files}
+diff --git a/apps/app/src/react-app/domains/session/editor/editor-surface.tsx b/apps/app/src/react-app/domains/session/editor/editor-surface.tsx
+index 47de1c2f..0c90fc05 100644
+--- a/apps/app/src/react-app/domains/session/editor/editor-surface.tsx
++++ b/apps/app/src/react-app/domains/session/editor/editor-surface.tsx
+@@ -13,6 +13,7 @@ import { addGroupKeys, applyMonacoTheme, monacoThemeName, scopeEditor, type Mona
+ import type { FileDoc } from "./editor-models";
+ import { hunkCounts, type LineHunk } from "./hunk-ops";
+ import { monacoOptionsFor, useEditorSettings } from "./editor-settings";
++import { documentScrollKey, readDocumentScroll, saveDocumentScroll } from "./scroll-position";
+ 
+ export type SurfaceDoc =
+   | { kind: "file"; key: string; doc: FileDoc }
+@@ -32,6 +33,7 @@ export type SurfaceDoc =
+ 
+ type EditorSurfaceProps = {
+   monaco: Monaco;
++  workspaceId: string;
+   surface: SurfaceDoc | null;
+   onSave: () => void;
+   onCursor: (position: { line: number; column: number } | null) => void;
+@@ -103,7 +105,7 @@ function hunkBar(
+ 
+ const VIEW_STATES = new Map<string, MonacoApi.editor.ICodeEditorViewState | MonacoApi.editor.IDiffEditorViewState | null>();
+ 
+-export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navigate, onAgentAction, onReady }: EditorSurfaceProps) {
++export function EditorSurface({ monaco, workspaceId, surface, onSave, onCursor, onHunks, navigate, onAgentAction, onReady }: EditorSurfaceProps) {
+   const onAgentRef = useRef(onAgentAction);
+   onAgentRef.current = onAgentAction;
+   const onReadyRef = useRef(onReady);
+@@ -160,7 +162,29 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
+     const cursor = (editor: MonacoApi.editor.ICodeEditor) => editor.onDidChangeCursorPosition((event) => {
+       onCursorRef.current({ line: event.position.lineNumber, column: event.position.column });
+     });
+-    const disposables = [cursor(code), cursor(diff.getModifiedEditor()), saveAction(code), saveAction(modified)];
++    const persistScroll = (key: string, editor: MonacoApi.editor.ICodeEditor) => {
++      saveDocumentScroll(documentScrollKey(workspaceId, 1, key), {
++        top: editor.getScrollTop(),
++        left: editor.getScrollLeft(),
++      });
++    };
++    let scrollSaveTimer: number | null = null;
++    const flushScroll = () => {
++      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
++      scrollSaveTimer = null;
++      const key = currentKey.current;
++      if (!key) return;
++      persistScroll(key, modeRef.current === "diff" ? diff.getModifiedEditor() : code);
++    };
++    const scheduleScrollSave = () => {
++      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
++      scrollSaveTimer = window.setTimeout(flushScroll, 120);
++    };
++    const disposables = [
++      cursor(code), cursor(diff.getModifiedEditor()), saveAction(code), saveAction(modified),
++      code.onDidScrollChange(scheduleScrollSave),
++      diff.getModifiedEditor().onDidScrollChange(scheduleScrollSave),
++    ];
+     // The agent in the editor: first in the right-click menu, and Cmd/Ctrl+L to ask. Monaco always sorts its
+     // "navigation" group first, so the agent items join it with orders below Go to Definition (1.1).
+     const agentActions = (editor: MonacoApi.editor.IStandaloneCodeEditor) => ([
+@@ -211,6 +235,7 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
+       diff.getOriginalEditor().render(true);
+     });
+     return () => {
++      flushScroll();
+       const key = currentKey.current;
+       if (key) VIEW_STATES.set(key, modeRef.current === "diff" ? diff.saveViewState() : code.saveViewState());
+       onReadyRef.current?.(null);
+@@ -222,7 +247,7 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
+       codeRef.current = null;
+       diffRef.current = null;
+     };
+-  }, [monaco]);
++  }, [monaco, workspaceId]);
+ 
+   // Switching documents.
+   useEffect(() => {
+@@ -230,34 +255,62 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
+     const diff = diffRef.current;
+     if (!code || !diff) return;
+     const previous = currentKey.current;
+-    if (previous) {
+-      viewStates.current.set(previous, mode === "diff" ? diff.saveViewState() : code.saveViewState());
++    const nextKey = surface?.key ?? null;
++    const changedDocument = previous !== nextKey;
++    if (previous && changedDocument) {
++      const previousEditor = modeRef.current === "diff" ? diff.getModifiedEditor() : code;
++      viewStates.current.set(previous, modeRef.current === "diff" ? diff.saveViewState() : code.saveViewState());
++      saveDocumentScroll(documentScrollKey(workspaceId, 1, previous), {
++        top: previousEditor.getScrollTop(),
++        left: previousEditor.getScrollLeft(),
++      });
+     }
+-    currentKey.current = surface?.key ?? null;
++    if (changedDocument) currentKey.current = nextKey;
+     if (!surface) {
+-      code.setModel(null);
++      if (code.getModel()) code.setModel(null);
+       setMode(null);
+       onCursorRef.current(null);
+       onHunksRef.current([]);
+       return;
+     }
+     if (surface.kind === "file") {
+-      code.setModel(surface.doc.model);
++      if (code.getModel() !== surface.doc.model) code.setModel(surface.doc.model);
+       code.updateOptions({ readOnly: false });
+-      const state = viewStates.current.get(surface.key);
+-      if (state) code.restoreViewState(state as MonacoApi.editor.ICodeEditorViewState);
++      if (changedDocument) {
++        const state = viewStates.current.get(surface.key);
++        if (state) code.restoreViewState(state as MonacoApi.editor.ICodeEditorViewState);
++        const scroll = readDocumentScroll(documentScrollKey(workspaceId, 1, surface.key));
++        requestAnimationFrame(() => {
++          if (currentKey.current !== surface.key) return;
++          if (scroll) {
++            code.setScrollTop(scroll.top);
++            code.setScrollLeft(scroll.left);
++          }
++          code.focus();
++        });
++      }
+       setMode("file");
+       onHunksRef.current([]);
+-      requestAnimationFrame(() => code.focus());
+       return;
+     }
+-    diff.setModel({ original: surface.original, modified: surface.modified });
++    const currentDiff = diff.getModel();
++    if (currentDiff?.original !== surface.original || currentDiff?.modified !== surface.modified) {
++      diff.setModel({ original: surface.original, modified: surface.modified });
++    }
+     diff.getModifiedEditor().updateOptions({ readOnly: Boolean(surface.readOnlyModified) });
+-    const state = viewStates.current.get(surface.key);
+-    if (state) diff.restoreViewState(state as MonacoApi.editor.IDiffEditorViewState);
++    if (changedDocument) {
++      const state = viewStates.current.get(surface.key);
++      if (state) diff.restoreViewState(state as MonacoApi.editor.IDiffEditorViewState);
++      const scroll = readDocumentScroll(documentScrollKey(workspaceId, 1, surface.key));
++      requestAnimationFrame(() => {
++        if (currentKey.current !== surface.key || !scroll) return;
++        diff.getModifiedEditor().setScrollTop(scroll.top);
++        diff.getModifiedEditor().setScrollLeft(scroll.left);
++      });
++    }
+     setMode("diff");
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [surface]);
++  }, [surface, workspaceId]);
+ 
+   // Hunk bars (review tabs) and the hunk list, after every diff update.
+   useEffect(() => {
+@@ -385,7 +438,15 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
+   }, [navigate, mode]);
+ 
+   return (
+-    <div className="relative min-h-0 flex-1" data-editor-surface={mode ?? "empty"}>
++    <div
++      className="relative min-h-0 flex-1"
++      data-editor-surface={mode ?? "empty"}
++      data-editor-document-surface
++      tabIndex={-1}
++      onPointerDownCapture={(event) => {
++        if (event.target === event.currentTarget) event.currentTarget.focus({ preventScroll: true });
++      }}
++    >
+       {/* display:none, not visibility: Monaco's layers set their own visibility and would show through. */}
+       <div ref={codeHostRef} className="monaco-component absolute inset-0" style={{ display: mode === "file" ? "block" : "none" }} />
+       <div ref={diffHostRef} className="monaco-component absolute inset-0" style={{ display: mode === "diff" ? "block" : "none" }} />
+diff --git a/apps/app/src/react-app/domains/session/editor/editor.css b/apps/app/src/react-app/domains/session/editor/editor.css
+index d0f5b5cf..6c517405 100644
+--- a/apps/app/src/react-app/domains/session/editor/editor.css
++++ b/apps/app/src/react-app/domains/session/editor/editor.css
+@@ -28,6 +28,19 @@
+ .omnirush-hunk-btn-primary:hover { background: color-mix(in srgb, var(--primary) 88%, black); }
+ .omnirush-hunk-bar-busy { opacity: 0.55; pointer-events: none; }
+ 
++/* Search marks are scoped to the active document only; Mermaid and other code blocks are untouched. */
++.monaco-editor .omnirush-document-find-match,
++.markdown-content .omnirush-document-find-match {
++  background: rgba(250, 204, 21, 0.28);
++  border-radius: 2px;
++}
++.monaco-editor .omnirush-document-find-active,
++.markdown-content .omnirush-document-find-active {
++  background: rgba(250, 204, 21, 0.58);
++  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.55);
++  border-radius: 2px;
++}
++
+ /* Git gutter (git-gutter.ts): added = solid bar, changed = striped bar, removed = wedge. Read-only: no pointer. */
+ .monaco-editor .omnirush-gutter-add,
+ .monaco-editor .omnirush-gutter-change {
+diff --git a/apps/app/src/react-app/domains/session/editor/group2-editor.tsx b/apps/app/src/react-app/domains/session/editor/group2-editor.tsx
+index 7b14c3ab..eb77e184 100644
+--- a/apps/app/src/react-app/domains/session/editor/group2-editor.tsx
++++ b/apps/app/src/react-app/domains/session/editor/group2-editor.tsx
+@@ -9,9 +9,12 @@ import type * as MonacoApi from "monaco-editor/editor/editor.api.js";
+ import { monacoOptionsFor, useEditorSettings } from "./editor-settings";
+ import type { AgentAction } from "./editor-surface";
+ import { addGroupKeys, monacoThemeName, scopeEditor, type Monaco } from "./monaco";
++import { documentScrollKey, readDocumentScroll, saveDocumentScroll } from "./scroll-position";
+ 
+ export function Group2Editor(props: {
+   monaco: Monaco;
++  workspaceId: string;
++  stateKey: string | null;
+   model: MonacoApi.editor.ITextModel | null;
+   onSave: () => void;
+   onFocus: () => void;
+@@ -20,6 +23,7 @@ export function Group2Editor(props: {
+ }) {
+   const hostRef = useRef<HTMLDivElement | null>(null);
+   const editorRef = useRef<MonacoApi.editor.IStandaloneCodeEditor | null>(null);
++  const currentStateKey = useRef<string | null>(null);
+   const latest = useRef(props);
+   latest.current = props;
+ 
+@@ -41,8 +45,24 @@ export function Group2Editor(props: {
+       theme: monacoThemeName(),
+     });
+     editorRef.current = editor;
++    let scrollSaveTimer: number | null = null;
++    const flushScroll = () => {
++      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
++      scrollSaveTimer = null;
++      const key = currentStateKey.current;
++      if (key) saveDocumentScroll(documentScrollKey(props.workspaceId, 2, key), {
++        top: editor.getScrollTop(),
++        left: editor.getScrollLeft(),
++      });
++    };
++    const scheduleScrollSave = () => {
++      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
++      scrollSaveTimer = window.setTimeout(flushScroll, 120);
++    };
+     const disposables = [
++      editor.onDidScrollChange(scheduleScrollSave),
+       editor.onDidFocusEditorWidget(() => latest.current.onFocus()),
++
+       editor.onDidBlurEditorWidget(() => window.dispatchEvent(new Event("omnirush:editor-blur"))),
+     ];
+     // Keys scoped to this editor (Monaco shares keybindings between editors; see scopeEditor).
+@@ -77,6 +97,7 @@ export function Group2Editor(props: {
+     const unsubscribe = useEditorSettings.subscribe((settings) => editor.updateOptions(monacoOptionsFor(settings)));
+     latest.current.onReady(editor);
+     return () => {
++      flushScroll();
+       latest.current.onReady(null);
+       unsubscribe();
+       for (const disposable of disposables) disposable.dispose();
+@@ -84,12 +105,45 @@ export function Group2Editor(props: {
+       editor.dispose();
+       editorRef.current = null;
+     };
+-  }, [props.monaco]);
++  }, [props.monaco, props.workspaceId]);
+ 
+   useEffect(() => {
+     const editor = editorRef.current;
+-    if (editor && editor.getModel() !== props.model) editor.setModel(props.model);
+-  }, [props.model]);
++    if (!editor) return;
++    const changedDocument = currentStateKey.current !== props.stateKey;
++    if (changedDocument && currentStateKey.current) {
++      saveDocumentScroll(documentScrollKey(props.workspaceId, 2, currentStateKey.current), {
++        top: editor.getScrollTop(),
++        left: editor.getScrollLeft(),
++      });
++    }
++    if (editor.getModel() !== props.model) editor.setModel(props.model);
++    if (changedDocument) {
++      currentStateKey.current = props.stateKey;
++      const scroll = props.stateKey
++        ? readDocumentScroll(documentScrollKey(props.workspaceId, 2, props.stateKey))
++        : null;
++      if (scroll && props.stateKey) {
++        const key = props.stateKey;
++        requestAnimationFrame(() => {
++          if (currentStateKey.current !== key) return;
++          editor.setScrollTop(scroll.top);
++          editor.setScrollLeft(scroll.left);
++        });
++      }
++    }
++  }, [props.model, props.stateKey, props.workspaceId]);
+ 
+-  return <div ref={hostRef} className="monaco-component min-h-0 flex-1" data-editor-group2-surface />;
++  return (
++    <div
++      ref={hostRef}
++      className="monaco-component min-h-0 flex-1"
++      data-editor-group2-surface
++      data-editor-document-surface
++      tabIndex={-1}
++      onPointerDownCapture={(event) => {
++        if (event.target === event.currentTarget) event.currentTarget.focus({ preventScroll: true });
++      }}
++    />
++  );
+ }
+diff --git a/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx b/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
+index 769a889e..433b480f 100644
+--- a/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
++++ b/apps/app/src/react-app/domains/session/editor/markdown-preview.tsx
+@@ -5,12 +5,13 @@
+  * the file in the editor, `#anchor` scrolls, http(s) opens in the browser, anything else does nothing. Images: a
+  * relative one loads from the project; a remote one is not loaded (a placeholder with its address).
+  */
+-import { useEffect, useMemo, useRef, useState } from "react";
++import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import type * as MonacoApi from "monaco-editor/editor/editor.api.js";
+ 
+ import type { OmniRushServerClient } from "@/app/lib/omnirush-server";
+ import { renderMarkdownHtml } from "@/components/markdown/markdown";
+ import { isImagePath } from "./image-view";
++import { documentScrollKey, readDocumentScroll, saveDocumentScroll } from "./scroll-position";
+ 
+ const LARGE = 1_000_000;
+ const MAX_IMAGES = 30;
+@@ -39,14 +40,22 @@ export function resolveProjectPath(from: string, target: string): string | null
+ export function MarkdownPreview(props: {
+   client: OmniRushServerClient;
+   workspaceId: string;
++  group: 1 | 2;
+   path: string;
+   model: MonacoApi.editor.ITextModel;
+   isDirty: () => boolean;
++  findQuery?: string;
++  activeMatchIndex?: number;
++  onFindMatches?: (count: number) => void;
+   onOpenFile: (path: string) => void;
+   onOpenExternal: (url: string) => void;
+ }) {
+   const [text, setText] = useState(() => props.model.getValue());
+   const rootRef = useRef<HTMLDivElement | null>(null);
++  const scrollRef = useRef<HTMLDivElement | null>(null);
++  const scrollTopRef = useRef(0);
++  const renderedHtmlRef = useRef<string | null>(null);
++  const persistentScrollKey = documentScrollKey(props.workspaceId, props.group, `preview:${props.path}`);
+ 
+   useEffect(() => {
+     setText(props.model.getValue());
+@@ -91,6 +100,43 @@ export function MarkdownPreview(props: {
+     return { __html: template.innerHTML };
+   }, [text]);
+ 
++  useLayoutEffect(() => {
++    const container = scrollRef.current;
++    if (!container) return;
++    const saved = readDocumentScroll(persistentScrollKey);
++    if (saved) {
++      container.scrollTop = saved.top;
++      container.scrollLeft = saved.left;
++    }
++    scrollTopRef.current = container.scrollTop;
++    let timer: number | null = null;
++    const onScroll = () => {
++      scrollTopRef.current = container.scrollTop;
++      if (timer !== null) window.clearTimeout(timer);
++      timer = window.setTimeout(() => {
++        timer = null;
++        saveDocumentScroll(persistentScrollKey, { top: container.scrollTop, left: container.scrollLeft });
++      }, 120);
++    };
++    container.addEventListener("scroll", onScroll, { passive: true });
++    return () => {
++      container.removeEventListener("scroll", onScroll);
++      if (timer !== null) window.clearTimeout(timer);
++      saveDocumentScroll(persistentScrollKey, { top: container.scrollTop, left: container.scrollLeft });
++    };
++  }, [persistentScrollKey]);
++
++  // Replacing the rendered Markdown DOM while the source changes must not jump
++  // a reader back to the top of the document.
++  useLayoutEffect(() => {
++    const container = scrollRef.current;
++    const nextHtml = html.__html;
++    if (renderedHtmlRef.current !== null && renderedHtmlRef.current !== nextHtml && container) {
++      container.scrollTop = scrollTopRef.current;
++    }
++    renderedHtmlRef.current = nextHtml;
++  }, [html]);
++
+   // Project images, read once per path while the preview is open (typing re-renders the HTML, not the images).
+   const imageUrls = useRef(new Map<string, Promise<string | null>>());
+   useEffect(() => {
+@@ -130,6 +176,62 @@ export function MarkdownPreview(props: {
+     };
+   }, [html, props.client, props.path, props.workspaceId]);
+ 
++  useEffect(() => {
++    const root = rootRef.current;
++    if (!root) return;
++    for (const mark of Array.from(root.querySelectorAll<HTMLElement>("mark[data-editor-find-highlight]"))) {
++      mark.replaceWith(document.createTextNode(mark.textContent ?? ""));
++    }
++    root.normalize();
++
++    const query = props.findQuery?.trim() ?? "";
++    if (!query) {
++      props.onFindMatches?.(0);
++      return;
++    }
++    const needle = query.toLocaleLowerCase();
++    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
++      acceptNode: (node) => {
++        const parent = node.parentElement;
++        return node.textContent && !parent?.closest("button,script,style")
++          ? NodeFilter.FILTER_ACCEPT
++          : NodeFilter.FILTER_REJECT;
++      },
++    });
++    const textNodes: Text[] = [];
++    while (walker.nextNode()) {
++      if (walker.currentNode instanceof Text) textNodes.push(walker.currentNode);
++    }
++    const marks: HTMLElement[] = [];
++    for (const textNode of textNodes) {
++      const text = textNode.data;
++      const folded = text.toLocaleLowerCase();
++      let cursor = 0;
++      let match = folded.indexOf(needle, cursor);
++      if (match < 0) continue;
++      const fragment = document.createDocumentFragment();
++      while (match >= 0) {
++        if (match > cursor) fragment.append(document.createTextNode(text.slice(cursor, match)));
++        const mark = document.createElement("mark");
++        mark.dataset.editorFindHighlight = String(marks.length);
++        mark.className = "omnirush-document-find-match";
++        mark.textContent = text.slice(match, match + query.length);
++        fragment.append(mark);
++        marks.push(mark);
++        cursor = match + query.length;
++        match = folded.indexOf(needle, cursor);
++      }
++      if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
++      textNode.replaceWith(fragment);
++    }
++    const activeIndex = marks.length ? ((props.activeMatchIndex ?? 0) % marks.length + marks.length) % marks.length : -1;
++    marks.forEach((mark, index) => {
++      mark.classList.toggle("omnirush-document-find-active", index === activeIndex);
++    });
++    props.onFindMatches?.(marks.length);
++    if (activeIndex >= 0) marks[activeIndex]?.scrollIntoView({ block: "center" });
++  }, [html, props.activeMatchIndex, props.findQuery, props.onFindMatches]);
++
+   const onClick = (event: React.MouseEvent<HTMLDivElement>) => {
+     const anchor = (event.target as HTMLElement).closest("a");
+     if (!anchor) {
+@@ -156,7 +258,14 @@ export function MarkdownPreview(props: {
+   };
+ 
+   return (
+-    <div className="min-h-0 flex-1 overflow-y-auto" data-editor-preview={props.path}>
++    <div
++      ref={scrollRef}
++      className="min-h-0 flex-1 overflow-y-auto"
++      data-editor-preview={props.path}
++      data-editor-document-surface
++      tabIndex={-1}
++      onPointerDownCapture={(event) => event.currentTarget.focus({ preventScroll: true })}
++    >
+       <div
+         ref={rootRef}
+         className="markdown-content mx-auto max-w-3xl select-text px-6 py-5 text-foreground"
+diff --git a/apps/app/src/react-app/domains/session/editor/scroll-position.ts b/apps/app/src/react-app/domains/session/editor/scroll-position.ts
+new file mode 100644
+index 00000000..9078b212
+--- /dev/null
++++ b/apps/app/src/react-app/domains/session/editor/scroll-position.ts
+@@ -0,0 +1,44 @@
++/**
++ * Scroll positions for editor documents (not file contents or cursor selections).
++ * localStorage is already the editor's durable, per-install preference store.
++ */
++export type ScrollPosition = { top: number; left: number };
++
++const STORAGE_KEY = "omnirush:editor:scroll:v1";
++const MAX_SAVED_POSITIONS = 400;
++
++type SavedPositions = Record<string, ScrollPosition>;
++
++function readPositions(): SavedPositions {
++  if (typeof localStorage === "undefined") return {};
++  try {
++    const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
++    return value && typeof value === "object" && !Array.isArray(value) ? value as SavedPositions : {};
++  } catch {
++    return {};
++  }
++}
++
++export function documentScrollKey(workspaceId: string, group: 1 | 2, documentKey: string): string {
++  return JSON.stringify([workspaceId, group, documentKey]);
++}
++
++export function readDocumentScroll(key: string): ScrollPosition | null {
++  const value = readPositions()[key];
++  if (!value || !Number.isFinite(value.top) || !Number.isFinite(value.left)) return null;
++  return { top: Math.max(0, value.top), left: Math.max(0, value.left) };
++}
++
++export function saveDocumentScroll(key: string, position: ScrollPosition): void {
++  if (!Number.isFinite(position.top) || !Number.isFinite(position.left)) return;
++  const all = readPositions();
++  delete all[key];
++  all[key] = { top: Math.max(0, position.top), left: Math.max(0, position.left) };
++  const keys = Object.keys(all);
++  for (const oldest of keys.slice(0, Math.max(0, keys.length - MAX_SAVED_POSITIONS))) delete all[oldest];
++  try {
++    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
++  } catch {
++    // Storage may be disabled or full; the current scroll position still works in memory.
++  }
++}
+diff --git a/apps/app/src/react-app/domains/session/surface/composer/composer.tsx b/apps/app/src/react-app/domains/session/surface/composer/composer.tsx
+index 76a2ff62..375d4c7c 100644
+--- a/apps/app/src/react-app/domains/session/surface/composer/composer.tsx
++++ b/apps/app/src/react-app/domains/session/surface/composer/composer.tsx
+@@ -1199,6 +1199,16 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
+     // Oversized images are compressed at send time (see image-compression.ts)
+     // so the chip appears instantly instead of blocking on canvas work here.
+     props.onAttachFiles(inputFiles);
++    // The native picker returns focus to its launcher, not the Lexical prompt.
++    // Focus immediately and again after React commits the attachment chip so a
++    // fast Cmd/Ctrl+A still reaches the prompt and selects its text.
++    const focusPrompt = () => {
++      const editable = rootRef.current?.querySelector<HTMLElement>("[contenteditable='true']");
++      editable?.focus({ preventScroll: true });
++      editorRef.current?.focus();
++    };
++    focusPrompt();
++    requestAnimationFrame(() => requestAnimationFrame(focusPrompt));
+   };
+ 
+   const panelRoundedClass =
+@@ -1319,6 +1329,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
+     <DevProfiler id="SessionComposer">
+     <div
+       ref={rootRef}
++      data-composer-root
+       className={props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} bg-gradient-to-t from-dls-surface via-dls-surface/95 to-transparent px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
+       style={{ contain: "layout style" }}
+       onKeyDownCapture={handleKeyDownCapture}
+diff --git a/apps/app/src/react-app/domains/session/surface/composer/editor.tsx b/apps/app/src/react-app/domains/session/surface/composer/editor.tsx
+index 4010d3ce..583156a0 100644
+--- a/apps/app/src/react-app/domains/session/surface/composer/editor.tsx
++++ b/apps/app/src/react-app/domains/session/surface/composer/editor.tsx
+@@ -32,6 +32,7 @@ import {
+   TextNode,
+   type EditorConfig,
+   type NodeKey,
++  type LexicalEditor,
+ } from "lexical";
+ import type { InitialConfigType } from "@lexical/react/LexicalComposer.js";
+ import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./mention-encoding";
+@@ -69,6 +70,7 @@ type EditorProps = {
+ 
+ export type LexicalPromptEditorHandle = {
+   insertSkillAtSelection: (skillName: string, skillToken?: string) => void;
++  focus: () => void;
+   /** Voice dictation: marks the cursor with a live (dim) transcript placeholder. */
+   voiceBegin: () => void;
+   /** The dictated text so far, and whether more is still being transcribed. False once the placeholder is gone. */
+@@ -467,6 +469,8 @@ function createAttachmentChipDom(attachment: ComposerAttachmentToken) {
+   const dom = document.createElement("span");
+   dom.className = "relative mx-0.5 inline-flex h-10 max-w-[140px] shrink-0 items-center align-middle";
+   dom.contentEditable = "false";
++  dom.style.userSelect = "none";
++  dom.style.webkitUserSelect = "none";
+   dom.setAttribute("spellcheck", "false");
+   dom.title = attachment.name;
+   dom.dataset.attachmentId = attachment.id;
+@@ -1299,6 +1303,9 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
+   const [editor] = useLexicalComposerContext();
+ 
+   useImperativeHandle(props.editorRef, () => ({
++    focus() {
++      editor.focus();
++    },
+     insertSkillAtSelection(skillName: string, skillToken?: string) {
+       editor.update(() => insertSkillAtSelection(skillName, skillToken));
+       editor.focus();
+@@ -1330,6 +1337,63 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
+   return null;
+ }
+ 
++const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
++
++function selectAllPrompt(editor: LexicalEditor) {
++  const root = editor.getRootElement();
++  if (!root) return;
++  // Focus first, then apply the Lexical range. Focusing after the update can
++  // restore the previous collapsed caret and make Cmd/Ctrl+A appear to do nothing.
++  root.focus({ preventScroll: true });
++  editor.update(() => $getRoot().select(), { discrete: true });
++}
++
++function PromptSelectAllPlugin() {
++  const [editor] = useLexicalComposerContext();
++
++  useEffect(() => {
++    const root = editor.getRootElement();
++    if (!root) return;
++    const composerRoot = root.closest<HTMLElement>("[data-composer-root]") ?? root;
++    const shouldSelectPrompt = (target: EventTarget | null) => {
++      const candidates = [
++        target instanceof Element ? target : null,
++        document.activeElement instanceof Element ? document.activeElement : null,
++      ].filter((candidate): candidate is Element => candidate !== null);
++      const insidePrompt = candidates.some((candidate) => root.contains(candidate));
++      const insideComposer = candidates.some((candidate) => composerRoot.contains(candidate));
++      const focusedOtherEditor = candidates.some((candidate) => {
++        const editorTarget = candidate.closest("input:not([type='file']), textarea, [contenteditable='true']");
++        return editorTarget !== null && !root.contains(editorTarget);
++      });
++      return insidePrompt || (insideComposer && !focusedOtherEditor);
++    };
++    const onKeyDown = (event: KeyboardEvent) => {
++      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
++      const modifier = isMac ? event.metaKey : event.ctrlKey;
++      if (!modifier || event.shiftKey || event.altKey || event.key.toLowerCase() !== "a") return;
++      if (!shouldSelectPrompt(event.target)) return;
++      event.preventDefault();
++      event.stopPropagation();
++      event.stopImmediatePropagation();
++      selectAllPrompt(editor);
++    };
++    const onNativeMenuSelectAll = (event: Event) => {
++      if (!shouldSelectPrompt(document.activeElement)) return;
++      event.preventDefault();
++      selectAllPrompt(editor);
++    };
++    window.addEventListener("keydown", onKeyDown, true);
++    window.addEventListener(NATIVE_MENU_SELECT_ALL_EVENT, onNativeMenuSelectAll, true);
++    return () => {
++      window.removeEventListener("keydown", onKeyDown, true);
++      window.removeEventListener(NATIVE_MENU_SELECT_ALL_EVENT, onNativeMenuSelectAll, true);
++    };
++  }, [editor]);
++
++  return null;
++}
++
+ function attachmentRemoveButton(target: EventTarget | null) {
+   if (!(target instanceof Element)) return null;
+   const button = target.closest("button[data-attachment-remove-id]");
+@@ -1425,6 +1489,7 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
+             <ContentEditable
+               className="min-h-[60px] max-h-[280px] w-full resize-none overflow-y-auto bg-transparent text-base leading-6 text-dls-text outline-none placeholder:text-dls-secondary lg:text-[13px] lg:leading-[1.55] [&_p]:min-h-[1.5rem] [&_p]:m-0"
+               aria-placeholder={props.placeholder}
++              data-composer-prompt
+               placeholder={<span />}
+               onPaste={props.onPaste}
+               onDrop={props.onDrop}
+@@ -1451,6 +1516,7 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
+         <PasteChipPlugin onPasteText={props.onPasteText} />
+         <PastedTextExpandPlugin pastedText={props.pastedText} onExpandPastedText={props.onExpandPastedText} />
+         <AttachmentRemovePlugin onRemoveAttachment={props.onRemoveAttachment} />
++        <PromptSelectAllPlugin />
+         <MentionChipNavigationPlugin />
+         <ImperativeHandlePlugin editorRef={ref} />
+       </div>
+diff --git a/apps/app/src/react-app/domains/session/surface/session-surface.tsx b/apps/app/src/react-app/domains/session/surface/session-surface.tsx
+index 27328788..f6a2b05d 100644
+--- a/apps/app/src/react-app/domains/session/surface/session-surface.tsx
++++ b/apps/app/src/react-app/domains/session/surface/session-surface.tsx
+@@ -2988,6 +2988,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
+   }, [props.sessionId, setFindLastFocused]);
+ 
+   const handleFindShortcut = useEffectEvent((event: KeyboardEvent) => {
++    if (event.defaultPrevented) return;
++    const target = event.target instanceof Element ? event.target : null;
++    if (target?.closest("[data-editor-document-surface], [data-editor-document-find]")) return;
+     const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
+     const mod = isMac ? event.metaKey : event.ctrlKey;
+     if (!mod || event.shiftKey || event.altKey || event.key?.toLowerCase() !== "f") return;
+diff --git a/apps/desktop/electron/app-menu.mjs b/apps/desktop/electron/app-menu.mjs
+index 5822fe3c..7d880f26 100644
+--- a/apps/desktop/electron/app-menu.mjs
++++ b/apps/desktop/electron/app-menu.mjs
+@@ -12,6 +12,7 @@ const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
+ const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
+ const NATIVE_MENU_SEND_FEEDBACK_EVENT = "omnirush:native-menu:send-feedback";
+ const NATIVE_MENU_WHATS_NEW_EVENT = "omnirush:native-menu:whats-new";
++const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
+ 
+ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+   let applicationMenuVisible = process.platform === "darwin";
+@@ -67,6 +68,14 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+ 
+   function install() {
+     const isMac = process.platform === "darwin";
++    const selectAllMenuItem = () => ({
++      label: "Select All",
++      accelerator: "CommandOrControl+A",
++      click: (_item, window) => {
++        const target = window ?? BrowserWindow.getFocusedWindow();
++        target?.webContents.send(NATIVE_MENU_SELECT_ALL_EVENT);
++      },
++    });
+     const template = /** @type {import("electron").MenuItemConstructorOptions[]} */ ([
+       ...(isMac
+         ? [
+@@ -131,7 +140,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+             ? [
+                 { role: "pasteAndMatchStyle" },
+                 { role: "delete" },
+-                { role: "selectAll" },
++                selectAllMenuItem(),
+                 { type: "separator" },
+                 {
+                   label: "Speech",
+@@ -151,7 +160,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+             : [
+                 { role: "delete" },
+                 { type: "separator" },
+-                { role: "selectAll" },
++                selectAllMenuItem(),
+               ]),
+         ],
+       },
+diff --git a/apps/desktop/electron/preload.mjs b/apps/desktop/electron/preload.mjs
+index 44aebd83..f9ce6c9a 100644
+--- a/apps/desktop/electron/preload.mjs
++++ b/apps/desktop/electron/preload.mjs
+@@ -4,6 +4,7 @@ const NATIVE_DEEP_LINK_EVENT = "omnirush:deep-link-native";
+ const NATIVE_MENU_OPEN_SETTINGS_EVENT = "omnirush:native-menu:open-settings";
+ const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "omnirush:native-menu:toggle-sidebar";
+ const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
++const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
+ const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
+ const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "omnirush:automation-runner:credential-rejected";
+ const FINISH_GUARD_EVENT = "omnirush:finish-guard:finish";
+@@ -23,6 +24,12 @@ function applyShellDocumentMarkers() {
+     root.classList.add("omnirush-electron");
+     if (process.platform === "darwin") {
+       root.classList.add("omnirush-platform-mac");
++      // This fork ships an Intel build next to upstream's Apple Silicon one, and
++      // some window-sized effects are priced for an Apple GPU. The stylesheet
++      // keys those decisions off the architecture of the running binary.
++      if (process.arch === "x64") {
++        root.classList.add("omnirush-platform-mac-intel");
++      }
+     } else if (process.platform === "win32") {
+       root.classList.add("omnirush-platform-windows");
+     } else if (process.platform === "linux") {
+@@ -357,6 +364,15 @@ ipcRenderer.on(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT, () => {
+   window.dispatchEvent(new Event(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT));
+ });
+ 
++ipcRenderer.on(NATIVE_MENU_SELECT_ALL_EVENT, () => {
++  if (typeof window === "undefined" || typeof document === "undefined") return;
++  const event = new Event(NATIVE_MENU_SELECT_ALL_EVENT, { cancelable: true });
++  window.dispatchEvent(event);
++  // Use Lexical selection when the composer handles it; otherwise preserve
++  // native Edit → Select All for other focused form controls.
++  if (!event.defaultPrevented) document.execCommand("selectAll");
++});
++
+ ipcRenderer.on(NATIVE_MENU_CHECK_UPDATES_EVENT, () => {
+   if (typeof window === "undefined") return;
+   window.dispatchEvent(new Event(NATIVE_MENU_CHECK_UPDATES_EVENT));

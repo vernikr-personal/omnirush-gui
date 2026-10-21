@@ -571,6 +571,13 @@ export default function EditorPanel(props: EditorPanelProps) {
   const [surfaceReady, setSurfaceReady] = useState(false);
   const pendingReveal = useRef<{ path: string; line: number; column: number; endColumn?: number } | null>(null);
   const [searchFocus, setSearchFocus] = useState(0);
+  const [documentFindOpen, setDocumentFindOpen] = useState(false);
+  const [documentFindQuery, setDocumentFindQuery] = useState("");
+  const [documentFindIndex, setDocumentFindIndex] = useState(0);
+  const [documentFindCount, setDocumentFindCount] = useState(0);
+  const [documentFindGroup, setDocumentFindGroup] = useState<1 | 2>(1);
+  const [documentFindFocus, setDocumentFindFocus] = useState(0);
+  const documentFindInputRef = useRef<HTMLInputElement | null>(null);
   const [problemsLoading, setProblemsLoading] = useState(false);
   const [breadcrumbSymbols, setBreadcrumbSymbols] = useState<string[]>([]);
   const problemsOpen = useEditorStore((store) => store.problemsOpen);
@@ -1233,6 +1240,97 @@ export default function EditorPanel(props: EditorPanelProps) {
       cancelled = true;
     };
   }, [docs, group2Tab, docsTick]);
+
+  const previewFindCount = useCallback((count: number) => {
+    setDocumentFindCount(count);
+    setDocumentFindIndex((index) => count > 0 ? Math.min(index, count - 1) : 0);
+  }, []);
+
+  useEffect(() => {
+    if (!documentFindOpen) {
+      setDocumentFindCount(0);
+      return;
+    }
+    const preview = documentFindGroup === 2 ? group2Tab?.kind === "preview" : surface?.kind === "preview";
+    const editor = documentFindGroup === 2 ? group2EditorRef.current : surfaceHandle.current?.activeEditor();
+    const model = documentFindGroup === 2
+      ? group2Doc?.model
+      : surface?.kind === "file" ? surface.doc.model : surface?.kind === "diff" ? surface.modified : null;
+    if (preview) return;
+    if (!editor || !model || !documentFindQuery.trim()) {
+      setDocumentFindCount(0);
+      return;
+    }
+    const matches = model.findMatches(documentFindQuery, false, false, false, null, true);
+    const activeIndex = matches.length ? ((documentFindIndex % matches.length) + matches.length) % matches.length : 0;
+    const decorations = matches.map((match, index) => ({
+      range: match.range,
+      options: {
+        inlineClassName: index === activeIndex ? "omnirush-document-find-active" : "omnirush-document-find-match",
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+      },
+    }));
+    const decorationIds = editor.deltaDecorations([], decorations);
+    setDocumentFindCount(matches.length);
+    if (matches.length) {
+      const range = matches[activeIndex]!.range;
+      editor.setSelection(range);
+      editor.revealRangeInCenterIfOutsideViewport(range);
+    }
+    return () => {
+      editor.deltaDecorations(decorationIds, []);
+    };
+  }, [documentFindGroup, documentFindIndex, documentFindOpen, documentFindQuery, group2Doc, group2Ready, group2Tab, monaco, surface, surfaceReady]);
+
+  useEffect(() => {
+    if (!documentFindOpen) return;
+    const frame = requestAnimationFrame(() => {
+      documentFindInputRef.current?.focus();
+      documentFindInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [documentFindFocus, documentFindOpen]);
+
+  const openDocumentFind = useCallback((group: 1 | 2) => {
+    if (group === 2 && !group2Tab) return;
+    useEditorStore.getState().setFocusedGroup(group);
+    setDocumentFindGroup(group);
+    setDocumentFindIndex(0);
+    setDocumentFindOpen(true);
+    setDocumentFindFocus((value) => value + 1);
+  }, [group2Tab]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const insideDocument = Boolean(target?.closest("[data-editor-document-surface]"));
+      const insideFindBar = Boolean(target?.closest("[data-editor-document-find]"));
+      if (!insideDocument && !insideFindBar) return;
+      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
+      const mod = isMac ? event.metaKey : event.ctrlKey;
+      if (!mod || event.shiftKey || event.altKey || event.key.toLowerCase() !== "f") return;
+      // Intercept before Monaco and the chat's conversation-find listener.
+      // Cmd/Ctrl+Shift+F remains the project-wide search shortcut.
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const group = target?.closest("[data-editor-group='2']")
+        ? 2
+        : insideDocument ? 1 : focusedGroup === 2 && group2Tab ? 2 : 1;
+      openDocumentFind(group);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [focusedGroup, group2Tab, openDocumentFind]);
+
+  const moveDocumentFind = (direction: 1 | -1) => {
+    if (!documentFindCount) return;
+    setDocumentFindIndex((index) => (index + direction + documentFindCount) % documentFindCount);
+  };
+
+  const closeDocumentFind = () => setDocumentFindOpen(false);
+
   // The git gutter in group 2 too.
   useEffect(() => {
     const editor = group2EditorRef.current;
@@ -1556,6 +1654,15 @@ export default function EditorPanel(props: EditorPanelProps) {
           <TooltipContent>Open preview to the side ({mac ? "⌘⇧V" : "Ctrl+Shift+V"})</TooltipContent>
         </Tooltip>
       ) : null}
+      {focusedTab ? (
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-xs" aria-label="Find in document" data-editor-document-find-trigger onClick={(event) => {
+            const group = event.currentTarget.closest("[data-editor-group='2']") ? 2 : 1;
+            openDocumentFind(group);
+          }}><Search /></Button>} />
+          <TooltipContent>Find in document ({mac ? "⌘F" : "Ctrl+F"})</TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger
           render={(
@@ -1631,6 +1738,7 @@ export default function EditorPanel(props: EditorPanelProps) {
           <div className={cn("flex min-h-0 min-w-0 flex-1", (surface?.kind === "preview" || surface?.kind === "image") && "hidden")}>
           <EditorSurface
             monaco={monaco}
+            workspaceId={workspaceId}
             surface={surface && (surface.kind === "file" || surface.kind === "diff") ? surface : null}
             onSave={() => void save()}
             onCursor={setCursor}
@@ -1647,9 +1755,13 @@ export default function EditorPanel(props: EditorPanelProps) {
             <MarkdownPreview
               client={client}
               workspaceId={workspaceId}
+              group={1}
               path={surface.doc.path}
               model={surface.doc.model}
               isDirty={() => docs.isDirty(surface.doc)}
+              findQuery={documentFindOpen && documentFindGroup === 1 ? documentFindQuery : ""}
+              activeMatchIndex={documentFindIndex}
+              onFindMatches={documentFindOpen && documentFindGroup === 1 ? previewFindCount : undefined}
               onOpenFile={openFile}
               onOpenExternal={(url) => void openDesktopUrl(url).catch(() => toast.error("Could not open the link."))}
             />
@@ -1694,6 +1806,8 @@ export default function EditorPanel(props: EditorPanelProps) {
       <div className={cn("flex min-h-0 flex-1", (group2Error || group2Tab?.kind !== "file" || isImagePath(group2Tab.path)) && "hidden")}>
         <Group2Editor
           monaco={monaco}
+          workspaceId={workspaceId}
+          stateKey={group2Tab?.kind === "file" && !isImagePath(group2Tab.path) ? group2Tab.id : null}
           model={group2Tab?.kind === "file" && group2Doc?.path === group2Tab.path ? group2Doc.model : null}
           onSave={() => {
             if (group2Tab) void saveFile(group2Tab.path, "manual");
@@ -1712,9 +1826,13 @@ export default function EditorPanel(props: EditorPanelProps) {
         <MarkdownPreview
           client={client}
           workspaceId={workspaceId}
+          group={2}
           path={group2Doc.path}
           model={group2Doc.model}
           isDirty={() => docs.isDirty(group2Doc)}
+          findQuery={documentFindOpen && documentFindGroup === 2 ? documentFindQuery : ""}
+          activeMatchIndex={documentFindIndex}
+          onFindMatches={documentFindOpen && documentFindGroup === 2 ? previewFindCount : undefined}
           onOpenFile={(path) => useEditorStore.getState().openTab2(workspaceId, { id: tabId({ kind: "file", path }), kind: "file", path })}
           onOpenExternal={(url) => void openDesktopUrl(url).catch(() => toast.error("Could not open the link."))}
         />
@@ -1794,7 +1912,12 @@ export default function EditorPanel(props: EditorPanelProps) {
   };
 
   return (
-    <div ref={panelRef} className="relative flex h-full min-h-0 bg-background" data-editor-panel data-editor-layout="ide">
+    <div
+      ref={panelRef}
+      className="relative flex h-full min-h-0 bg-background"
+      data-editor-panel
+      data-editor-layout="ide"
+    >
       {/* The activity rail: the side views, quick open, and the app's own destinations at its foot. */}
       <nav aria-label="Editor views" className="flex w-12 shrink-0 flex-col items-center gap-1 border-e border-border py-2 mac:pt-10" data-editor-rail-views>
         {railItem("files", "Files", <Files />, mac ? "⌘⇧E" : "Ctrl+Shift+E")}
@@ -1946,6 +2069,48 @@ export default function EditorPanel(props: EditorPanelProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {documentFindOpen ? (
+        <div
+          className="absolute right-3 top-11 z-40 flex h-9 w-[min(28rem,calc(100%-4.5rem))] items-center gap-1 rounded-lg border border-border bg-popover px-1.5 text-xs text-popover-foreground shadow-lg"
+          data-editor-document-find
+          role="search"
+          aria-label="Find in document"
+        >
+          <Search className="ms-1 size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            ref={documentFindInputRef}
+            value={documentFindQuery}
+            onChange={(event) => {
+              setDocumentFindQuery(event.target.value);
+              setDocumentFindIndex(0);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                moveDocumentFind(event.shiftKey ? -1 : 1);
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                closeDocumentFind();
+              }
+            }}
+            placeholder="Find in document"
+            aria-label="Find in document"
+            className="h-7 min-w-0 flex-1 bg-transparent px-1 outline-none placeholder:text-muted-foreground"
+          />
+          <span className="min-w-12 text-center tabular-nums text-muted-foreground" aria-live="polite">
+            {documentFindCount ? `${Math.min(documentFindIndex + 1, documentFindCount)} of ${documentFindCount}` : "0 of 0"}
+          </span>
+          <Button variant="ghost" size="icon-xs" aria-label="Previous match" disabled={!documentFindCount} onClick={() => moveDocumentFind(-1)}>
+            <ChevronUp />
+          </Button>
+          <Button variant="ghost" size="icon-xs" aria-label="Next match" disabled={!documentFindCount} onClick={() => moveDocumentFind(1)}>
+            <ChevronDown />
+          </Button>
+          <Button variant="ghost" size="icon-xs" aria-label="Close document search" onClick={closeDocumentFind}>
+            <X />
+          </Button>
+        </div>
+      ) : null}
       {quickOpen ? (
         <QuickOpen
           files={files}

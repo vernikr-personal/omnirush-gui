@@ -2988,6 +2988,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
   }, [props.sessionId, setFindLastFocused]);
 
   const handleFindShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("[data-editor-document-surface], [data-editor-document-find]")) return;
     const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
     const mod = isMac ? event.metaKey : event.ctrlKey;
     if (!mod || event.shiftKey || event.altKey || event.key?.toLowerCase() !== "f") return;

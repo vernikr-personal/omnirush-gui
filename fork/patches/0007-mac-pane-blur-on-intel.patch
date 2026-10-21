@@ -1,5 +1,5 @@
 diff --git a/apps/app/src/app/index.css b/apps/app/src/app/index.css
-index 514d5b2..bad3802 100644
+index 514d5b2f..bad38021 100644
 --- a/apps/app/src/app/index.css
 +++ b/apps/app/src/app/index.css
 @@ -207,6 +207,11 @@ body {
@@ -61,10 +61,10 @@ index 514d5b2..bad3802 100644
     illuminating left-to-right like a subtle running light. Used for boot,
     "awaiting first token", and any idle-but-alive hint. */
 diff --git a/apps/app/src/react-app/domains/session/chat/session-page.tsx b/apps/app/src/react-app/domains/session/chat/session-page.tsx
-index 45cefa8..fab7758 100644
+index 037a9f7d..10235f60 100644
 --- a/apps/app/src/react-app/domains/session/chat/session-page.tsx
 +++ b/apps/app/src/react-app/domains/session/chat/session-page.tsx
-@@ -1505,7 +1505,7 @@ export function SessionPage(props: SessionPageProps) {
+@@ -1507,7 +1507,7 @@ export function SessionPage(props: SessionPageProps) {
  
    // The chat itself: beside the sessions sidebar in Chat mode, docked on the right in IDE mode.
    const chatPane = (
@@ -73,7 +73,7 @@ index 45cefa8..fab7758 100644
            {/* The pane `<main>` above already carries the macOS vibrancy blur. A
                second backdrop filter on the header (or on the transcript surface
                below) is invisible — nothing scrolls beneath either — but each
-@@ -2317,7 +2317,7 @@ export function SessionPage(props: SessionPageProps) {
+@@ -2326,7 +2326,7 @@ export function SessionPage(props: SessionPageProps) {
                    maxSize="70%"
                    className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"
                  >

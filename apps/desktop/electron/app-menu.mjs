@@ -12,6 +12,7 @@ const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
 const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
 const NATIVE_MENU_SEND_FEEDBACK_EVENT = "omnirush:native-menu:send-feedback";
 const NATIVE_MENU_WHATS_NEW_EVENT = "omnirush:native-menu:whats-new";
+const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
 
 export function createApplicationMenu({ appName, docsUrl, getWindow }) {
   let applicationMenuVisible = process.platform === "darwin";
@@ -67,6 +68,14 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
 
   function install() {
     const isMac = process.platform === "darwin";
+    const selectAllMenuItem = () => ({
+      label: "Select All",
+      accelerator: "CommandOrControl+A",
+      click: (_item, window) => {
+        const target = window ?? BrowserWindow.getFocusedWindow();
+        target?.webContents.send(NATIVE_MENU_SELECT_ALL_EVENT);
+      },
+    });
     const template = /** @type {import("electron").MenuItemConstructorOptions[]} */ ([
       ...(isMac
         ? [
@@ -131,7 +140,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
             ? [
                 { role: "pasteAndMatchStyle" },
                 { role: "delete" },
-                { role: "selectAll" },
+                selectAllMenuItem(),
                 { type: "separator" },
                 {
                   label: "Speech",
@@ -151,7 +160,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
             : [
                 { role: "delete" },
                 { type: "separator" },
-                { role: "selectAll" },
+                selectAllMenuItem(),
               ]),
         ],
       },

@@ -1,5 +1,5 @@
 diff --git a/apps/app/src/components/chat/reasoning-block.tsx b/apps/app/src/components/chat/reasoning-block.tsx
-index fd4ddec..523a6e3 100644
+index fd4ddec8..523a6e35 100644
 --- a/apps/app/src/components/chat/reasoning-block.tsx
 +++ b/apps/app/src/components/chat/reasoning-block.tsx
 @@ -1,6 +1,6 @@
@@ -83,7 +83,7 @@ index fd4ddec..523a6e3 100644
      </Collapsible>
    )
 diff --git a/apps/app/src/components/markdown/markdown-primitive.ts b/apps/app/src/components/markdown/markdown-primitive.ts
-index 00858af..0d1f5b2 100644
+index 00858afa..0d1f5b27 100644
 --- a/apps/app/src/components/markdown/markdown-primitive.ts
 +++ b/apps/app/src/components/markdown/markdown-primitive.ts
 @@ -171,7 +171,7 @@ function chatCodeBlockHtml(text: string, lang: string | undefined) {
@@ -107,7 +107,7 @@ index 00858af..0d1f5b2 100644
    }
  
 diff --git a/apps/app/src/components/markdown/markdown.tsx b/apps/app/src/components/markdown/markdown.tsx
-index 51ebcf9..2dbdabe 100644
+index 51ebcf97..2dbdabee 100644
 --- a/apps/app/src/components/markdown/markdown.tsx
 +++ b/apps/app/src/components/markdown/markdown.tsx
 @@ -25,6 +25,7 @@ import {
@@ -153,7 +153,7 @@ index 51ebcf9..2dbdabe 100644
  
 diff --git a/apps/app/src/components/markdown/use-streaming-render-pace.ts b/apps/app/src/components/markdown/use-streaming-render-pace.ts
 new file mode 100644
-index 0000000..295b835
+index 00000000..295b8352
 --- /dev/null
 +++ b/apps/app/src/components/markdown/use-streaming-render-pace.ts
 @@ -0,0 +1,83 @@
@@ -241,7 +241,7 @@ index 0000000..295b835
 +  return paced ? published : text;
 +}
 diff --git a/apps/app/src/react-app/domains/session/status/session-progress.ts b/apps/app/src/react-app/domains/session/status/session-progress.ts
-index aac6791..0502af0 100644
+index aac67914..0502af03 100644
 --- a/apps/app/src/react-app/domains/session/status/session-progress.ts
 +++ b/apps/app/src/react-app/domains/session/status/session-progress.ts
 @@ -54,6 +54,27 @@ function partFingerprint(part: UIMessage["parts"][number], value: () => unknown)
@@ -283,7 +283,7 @@ index aac6791..0502af0 100644
          parts[key] = partFingerprint(part, () => [part.state, part.input,
 diff --git a/apps/app/tests/reasoning-block-collapsed.test.tsx b/apps/app/tests/reasoning-block-collapsed.test.tsx
 new file mode 100644
-index 0000000..547f59d
+index 00000000..547f59d9
 --- /dev/null
 +++ b/apps/app/tests/reasoning-block-collapsed.test.tsx
 @@ -0,0 +1,43 @@
@@ -332,7 +332,7 @@ index 0000000..547f59d
 +});
 diff --git a/apps/app/tests/session-progress-fingerprint.test.ts b/apps/app/tests/session-progress-fingerprint.test.ts
 new file mode 100644
-index 0000000..b907ab6
+index 00000000..b907ab6d
 --- /dev/null
 +++ b/apps/app/tests/session-progress-fingerprint.test.ts
 @@ -0,0 +1,47 @@
@@ -385,7 +385,7 @@ index 0000000..b907ab6
 +});
 diff --git a/docs/intel-mac-performance.md b/docs/intel-mac-performance.md
 new file mode 100644
-index 0000000..357dc5b
+index 00000000..357dc5b5
 --- /dev/null
 +++ b/docs/intel-mac-performance.md
 @@ -0,0 +1,116 @@

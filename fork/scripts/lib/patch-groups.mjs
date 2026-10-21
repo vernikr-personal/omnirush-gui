@@ -74,6 +74,25 @@ export const PATCH_GROUPS = [
     ],
     addsOnly: false,
   },
+  {
+    file: "0009-editor-scroll-find-select-all.patch",
+    title: "remember editor document position, find in the active document, and select prompt text",
+    paths: [
+      "apps/app/src/react-app/domains/session/editor/editor-panel.tsx",
+      "apps/app/src/react-app/domains/session/editor/editor-surface.tsx",
+      "apps/app/src/react-app/domains/session/editor/editor.css",
+      "apps/app/src/react-app/domains/session/editor/group2-editor.tsx",
+      "apps/app/src/react-app/domains/session/editor/markdown-preview.tsx",
+      "apps/app/src/react-app/domains/session/editor/scroll-position.ts",
+      "apps/app/src/react-app/domains/session/surface/composer/composer.tsx",
+      "apps/app/src/react-app/domains/session/surface/composer/editor.tsx",
+      "apps/app/src/react-app/domains/session/surface/session-surface.tsx",
+      "apps/app/tests/editor-scroll-position.test.ts",
+      "apps/desktop/electron/app-menu.mjs",
+      "apps/desktop/electron/preload.mjs",
+    ],
+    addsOnly: false,
+  },
 ];
 
 /** Paths no group may touch: the engine tarballs are pinned in upstream releases. */

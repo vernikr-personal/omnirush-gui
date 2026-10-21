@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/release-desktop.yml b/.github/workflows/release-desktop.yml
-index 77230b8..af3a100 100644
+index 579d5e1e..b816a65f 100644
 --- a/.github/workflows/release-desktop.yml
 +++ b/.github/workflows/release-desktop.yml
 @@ -106,12 +106,30 @@ jobs:
@@ -137,7 +137,7 @@ index 77230b8..af3a100 100644
          shell: bash
          run: scripts/release/verify-macos-signing.sh apps/desktop/dist-electron
  
-@@ -288,6 +336,7 @@ jobs:
+@@ -318,6 +366,7 @@ jobs:
          env:
            GH_TOKEN: ${{ github.token }}
            UPDATE_MANIFEST: ${{ matrix.update_manifest }}
@@ -145,7 +145,7 @@ index 77230b8..af3a100 100644
          shell: bash
          run: |
            set -euo pipefail
-@@ -303,17 +352,57 @@ jobs:
+@@ -333,17 +382,57 @@ jobs:
              echo "Update manifest $manifest is missing; refusing to publish installers the app cannot update to." >&2
              exit 1
            fi

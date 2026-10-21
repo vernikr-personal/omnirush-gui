@@ -4,6 +4,7 @@ const NATIVE_DEEP_LINK_EVENT = "omnirush:deep-link-native";
 const NATIVE_MENU_OPEN_SETTINGS_EVENT = "omnirush:native-menu:open-settings";
 const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "omnirush:native-menu:toggle-sidebar";
 const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
+const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
 const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
 const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "omnirush:automation-runner:credential-rejected";
 const FINISH_GUARD_EVENT = "omnirush:finish-guard:finish";
@@ -361,6 +362,15 @@ ipcRenderer.on(NATIVE_MENU_OPEN_SETTINGS_EVENT, () => {
 ipcRenderer.on(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT, () => {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT));
+});
+
+ipcRenderer.on(NATIVE_MENU_SELECT_ALL_EVENT, () => {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const event = new Event(NATIVE_MENU_SELECT_ALL_EVENT, { cancelable: true });
+  window.dispatchEvent(event);
+  // Use Lexical selection when the composer handles it; otherwise preserve
+  // native Edit → Select All for other focused form controls.
+  if (!event.defaultPrevented) document.execCommand("selectAll");
 });
 
 ipcRenderer.on(NATIVE_MENU_CHECK_UPDATES_EVENT, () => {

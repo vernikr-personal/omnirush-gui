@@ -1,8 +1,53 @@
+diff --git a/apps/desktop/electron/app-menu.mjs b/apps/desktop/electron/app-menu.mjs
+index 5822fe3c..7d880f26 100644
+--- a/apps/desktop/electron/app-menu.mjs
++++ b/apps/desktop/electron/app-menu.mjs
+@@ -12,6 +12,7 @@ const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
+ const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
+ const NATIVE_MENU_SEND_FEEDBACK_EVENT = "omnirush:native-menu:send-feedback";
+ const NATIVE_MENU_WHATS_NEW_EVENT = "omnirush:native-menu:whats-new";
++const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
+ 
+ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+   let applicationMenuVisible = process.platform === "darwin";
+@@ -67,6 +68,14 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+ 
+   function install() {
+     const isMac = process.platform === "darwin";
++    const selectAllMenuItem = () => ({
++      label: "Select All",
++      accelerator: "CommandOrControl+A",
++      click: (_item, window) => {
++        const target = window ?? BrowserWindow.getFocusedWindow();
++        target?.webContents.send(NATIVE_MENU_SELECT_ALL_EVENT);
++      },
++    });
+     const template = /** @type {import("electron").MenuItemConstructorOptions[]} */ ([
+       ...(isMac
+         ? [
+@@ -131,7 +140,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+             ? [
+                 { role: "pasteAndMatchStyle" },
+                 { role: "delete" },
+-                { role: "selectAll" },
++                selectAllMenuItem(),
+                 { type: "separator" },
+                 {
+                   label: "Speech",
+@@ -151,7 +160,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow }) {
+             : [
+                 { role: "delete" },
+                 { type: "separator" },
+-                { role: "selectAll" },
++                selectAllMenuItem(),
+               ]),
+         ],
+       },
 diff --git a/apps/desktop/electron/main.mjs b/apps/desktop/electron/main.mjs
-index 0505a66..0aba6eb 100644
+index 37969b98..bc440b77 100644
 --- a/apps/desktop/electron/main.mjs
 +++ b/apps/desktop/electron/main.mjs
-@@ -205,9 +205,9 @@ if (BLANK_SLATE_LAUNCH.enabled || process.env.OMNIRUSH_ELECTRON_USE_MOCK_KEYCHAI
+@@ -210,9 +210,9 @@ if (BLANK_SLATE_LAUNCH.enabled || process.env.OMNIRUSH_ELECTRON_USE_MOCK_KEYCHAI
    // system keychain normally.
    app.commandLine.appendSwitch("use-mock-keychain");
  }
@@ -16,10 +61,18 @@ index 0505a66..0aba6eb 100644
    appName: DISPLAY_APP_NAME,
    docsUrl: DOCS_PAGE_URL,
 diff --git a/apps/desktop/electron/preload.mjs b/apps/desktop/electron/preload.mjs
-index 44aebd8..8dca01a 100644
+index 44aebd83..f9ce6c9a 100644
 --- a/apps/desktop/electron/preload.mjs
 +++ b/apps/desktop/electron/preload.mjs
-@@ -23,6 +23,12 @@ function applyShellDocumentMarkers() {
+@@ -4,6 +4,7 @@ const NATIVE_DEEP_LINK_EVENT = "omnirush:deep-link-native";
+ const NATIVE_MENU_OPEN_SETTINGS_EVENT = "omnirush:native-menu:open-settings";
+ const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "omnirush:native-menu:toggle-sidebar";
+ const NATIVE_MENU_CHECK_UPDATES_EVENT = "omnirush:native-menu:check-updates";
++const NATIVE_MENU_SELECT_ALL_EVENT = "omnirush:native-menu:select-all";
+ const NATIVE_MENU_ZOOM_EVENT = "omnirush:native-menu:zoom";
+ const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "omnirush:automation-runner:credential-rejected";
+ const FINISH_GUARD_EVENT = "omnirush:finish-guard:finish";
+@@ -23,6 +24,12 @@ function applyShellDocumentMarkers() {
      root.classList.add("omnirush-electron");
      if (process.platform === "darwin") {
        root.classList.add("omnirush-platform-mac");
@@ -32,8 +85,24 @@ index 44aebd8..8dca01a 100644
      } else if (process.platform === "win32") {
        root.classList.add("omnirush-platform-windows");
      } else if (process.platform === "linux") {
+@@ -357,6 +364,15 @@ ipcRenderer.on(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT, () => {
+   window.dispatchEvent(new Event(NATIVE_MENU_TOGGLE_SIDEBAR_EVENT));
+ });
+ 
++ipcRenderer.on(NATIVE_MENU_SELECT_ALL_EVENT, () => {
++  if (typeof window === "undefined" || typeof document === "undefined") return;
++  const event = new Event(NATIVE_MENU_SELECT_ALL_EVENT, { cancelable: true });
++  window.dispatchEvent(event);
++  // Use Lexical selection when the composer handles it; otherwise preserve
++  // native Edit → Select All for other focused form controls.
++  if (!event.defaultPrevented) document.execCommand("selectAll");
++});
++
+ ipcRenderer.on(NATIVE_MENU_CHECK_UPDATES_EVENT, () => {
+   if (typeof window === "undefined") return;
+   window.dispatchEvent(new Event(NATIVE_MENU_CHECK_UPDATES_EVENT));
 diff --git a/apps/desktop/electron/recovery.mjs b/apps/desktop/electron/recovery.mjs
-index 3b7906a..ed094f1 100644
+index 3b7906a8..ed094f1a 100644
 --- a/apps/desktop/electron/recovery.mjs
 +++ b/apps/desktop/electron/recovery.mjs
 @@ -103,7 +103,7 @@ function validRecoveryArtifactIdentity(artifact) {
@@ -59,10 +128,10 @@ index 3b7906a..ed094f1 100644
      }
      const artifact = {
 diff --git a/apps/desktop/electron/updater.mjs b/apps/desktop/electron/updater.mjs
-index 645bbe1..1561022 100644
+index 02060842..dafb543a 100644
 --- a/apps/desktop/electron/updater.mjs
 +++ b/apps/desktop/electron/updater.mjs
-@@ -66,7 +66,7 @@ function resolveAppVersion(app) {
+@@ -67,7 +67,7 @@ function resolveAppVersion(app) {
  // The public distribution reads `latest*.yml` from the latest GitHub release.
  // There is no public Alpha feed: the Alpha channel exists only when a
  // distribution ships its own feed directory (see updaterFeedOptions).
@@ -71,7 +140,7 @@ index 645bbe1..1561022 100644
  
  /**
   * Feed selection shared by every updater IPC handler. `manifestChannel` picks
-@@ -239,7 +239,7 @@ export function targetedStableUpdaterFeed(currentVersion, targetVersion, allowOl
+@@ -240,7 +240,7 @@ export function targetedStableUpdaterFeed(currentVersion, targetVersion, allowOl
        ? "Recovery target version must differ from the installed version."
        : "Target update version must be newer than the installed version.");
    }
@@ -80,7 +149,7 @@ index 645bbe1..1561022 100644
  }
  
  function updaterChannelState(app, channel, targetVersion, feedOptions) {
-@@ -430,7 +430,7 @@ function installerAssetArch(arch) {
+@@ -431,7 +431,7 @@ function installerAssetArch(arch) {
  export function releaseAssetDirectory(feedUrl, version) {
    const base = typeof feedUrl === "string" ? feedUrl.replace(/\/+$/, "") : "";
    if (base === STABLE_UPDATER_FEED_URL && typeof version === "string" && /^\d+\.\d+\.\d+/.test(version)) {
@@ -89,7 +158,7 @@ index 645bbe1..1561022 100644
    }
    return base;
  }
-@@ -976,7 +976,7 @@ export function registerUpdaterIpc({
+@@ -977,7 +977,7 @@ export function registerUpdaterIpc({
    async function resolveRecoveryArtifact(version) {
      if (!electronNet?.fetch) return null;
      try {
@@ -99,7 +168,7 @@ index 645bbe1..1561022 100644
        if (!response.ok) return null;
        return selectRecoveryArtifact(parseRecoveryManifest(await response.text()), {
 diff --git a/apps/desktop/electron/updater.test.mjs b/apps/desktop/electron/updater.test.mjs
-index 5aeb1ec..6ed9121 100644
+index 5aeb1ec9..6ed91211 100644
 --- a/apps/desktop/electron/updater.test.mjs
 +++ b/apps/desktop/electron/updater.test.mjs
 @@ -34,7 +34,7 @@ import {

@@ -1199,6 +1199,16 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     // Oversized images are compressed at send time (see image-compression.ts)
     // so the chip appears instantly instead of blocking on canvas work here.
     props.onAttachFiles(inputFiles);
+    // The native picker returns focus to its launcher, not the Lexical prompt.
+    // Focus immediately and again after React commits the attachment chip so a
+    // fast Cmd/Ctrl+A still reaches the prompt and selects its text.
+    const focusPrompt = () => {
+      const editable = rootRef.current?.querySelector<HTMLElement>("[contenteditable='true']");
+      editable?.focus({ preventScroll: true });
+      editorRef.current?.focus();
+    };
+    focusPrompt();
+    requestAnimationFrame(() => requestAnimationFrame(focusPrompt));
   };
 
   const panelRoundedClass =
@@ -1319,6 +1329,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     <DevProfiler id="SessionComposer">
     <div
       ref={rootRef}
+      data-composer-root
       className={props.flush ? `relative ${toolMenuOpen ? "z-50" : "z-20"}` : `sticky bottom-0 ${toolMenuOpen ? "z-50" : "z-20"} bg-gradient-to-t from-dls-surface via-dls-surface/95 to-transparent px-4 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] max-lg:px-3 lg:px-8 ${props.compactTopSpacing ? "pt-0" : "pt-1"}`}
       style={{ contain: "layout style" }}
       onKeyDownCapture={handleKeyDownCapture}
