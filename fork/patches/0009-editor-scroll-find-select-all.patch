@@ -916,6 +916,69 @@ index 27328788..f6a2b05d 100644
      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
      const mod = isMac ? event.metaKey : event.ctrlKey;
      if (!mod || event.shiftKey || event.altKey || event.key?.toLowerCase() !== "f") return;
+diff --git a/apps/app/tests/editor-scroll-position.test.ts b/apps/app/tests/editor-scroll-position.test.ts
+new file mode 100644
+index 00000000..1eb469f3
+--- /dev/null
++++ b/apps/app/tests/editor-scroll-position.test.ts
+@@ -0,0 +1,57 @@
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import {
++  documentScrollKey,
++  readDocumentScroll,
++  saveDocumentScroll,
++} from "../src/react-app/domains/session/editor/scroll-position";
++
++const STORAGE_KEY = "omnirush:editor:scroll:v1";
++
++class MemoryStorage {
++  private values = new Map<string, string>();
++  getItem(key: string) { return this.values.get(key) ?? null; }
++  setItem(key: string, value: string) { this.values.set(key, String(value)); }
++  removeItem(key: string) { this.values.delete(key); }
++  clear() { this.values.clear(); }
++}
++
++let previousStorage: Storage | undefined;
++
++beforeEach(() => {
++  previousStorage = globalThis.localStorage;
++  Object.defineProperty(globalThis, "localStorage", {
++    configurable: true,
++    value: new MemoryStorage(),
++  });
++});
++
++afterEach(() => {
++  if (previousStorage === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
++  else Object.defineProperty(globalThis, "localStorage", { configurable: true, value: previousStorage });
++});
++
++describe("editor document scroll positions", () => {
++  test("persists a separate position for each workspace, group, and document", () => {
++    const first = documentScrollKey("workspace-a", 1, "src/index.ts");
++    const second = documentScrollKey("workspace-a", 2, "src/index.ts");
++    const third = documentScrollKey("workspace-b", 1, "src/index.ts");
++    saveDocumentScroll(first, { top: 120, left: 8 });
++    saveDocumentScroll(second, { top: 240, left: 16 });
++    saveDocumentScroll(third, { top: 360, left: 24 });
++
++    expect(readDocumentScroll(first)).toEqual({ top: 120, left: 8 });
++    expect(readDocumentScroll(second)).toEqual({ top: 240, left: 16 });
++    expect(readDocumentScroll(third)).toEqual({ top: 360, left: 24 });
++  });
++
++  test("clamps invalid negative positions and tolerates corrupt storage", () => {
++    const key = documentScrollKey("workspace-a", 1, "src/index.ts");
++    saveDocumentScroll(key, { top: -4, left: -12 });
++    expect(readDocumentScroll(key)).toEqual({ top: 0, left: 0 });
++
++    globalThis.localStorage.setItem(STORAGE_KEY, "{broken json");
++    expect(readDocumentScroll(key)).toBeNull();
++    saveDocumentScroll(key, { top: 12, left: 3 });
++    expect(readDocumentScroll(key)).toEqual({ top: 12, left: 3 });
++  });
++});
 diff --git a/apps/desktop/electron/app-menu.mjs b/apps/desktop/electron/app-menu.mjs
 index 5822fe3c..7d880f26 100644
 --- a/apps/desktop/electron/app-menu.mjs
@@ -1002,3 +1065,23 @@ index 44aebd83..f9ce6c9a 100644
  ipcRenderer.on(NATIVE_MENU_CHECK_UPDATES_EVENT, () => {
    if (typeof window === "undefined") return;
    window.dispatchEvent(new Event(NATIVE_MENU_CHECK_UPDATES_EVENT));
+diff --git a/apps/server/scripts/copy-shared-modules.mjs b/apps/server/scripts/copy-shared-modules.mjs
+index 46043ee0..aca2079b 100644
+--- a/apps/server/scripts/copy-shared-modules.mjs
++++ b/apps/server/scripts/copy-shared-modules.mjs
+@@ -1,12 +1,11 @@
+-// tsc emits only TypeScript: the plain-JavaScript modules shared with the CLI
+-// (src/workspace/*.mjs, src/computer-use/shared/*.mjs and src/provider-lock/*.mjs, see PARITY.sha256 there) are
+-// copied into dist as they are.
++// tsc emits only TypeScript: plain-JavaScript modules required at runtime
++// (workspace, computer-use/shared, provider-lock, and box) are copied into dist.
+ import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
+ import { join, resolve } from "node:path";
+ 
+ const root = resolve(import.meta.dirname, "..");
+ const copied = [];
+-for (const folder of ["workspace", "computer-use/shared", "provider-lock"]) {
++for (const folder of ["workspace", "computer-use/shared", "provider-lock", "box"]) {
+   const from = join(root, "src", folder);
+   const to = join(root, "dist", folder);
+   mkdirSync(to, { recursive: true });

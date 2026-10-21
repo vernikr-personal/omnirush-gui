@@ -88,6 +88,7 @@ export const PATCH_GROUPS = [
       "apps/app/src/react-app/domains/session/surface/composer/editor.tsx",
       "apps/app/src/react-app/domains/session/surface/session-surface.tsx",
       "apps/app/tests/editor-scroll-position.test.ts",
+      "apps/server/scripts/copy-shared-modules.mjs",
       "apps/desktop/electron/app-menu.mjs",
       "apps/desktop/electron/preload.mjs",
     ],
