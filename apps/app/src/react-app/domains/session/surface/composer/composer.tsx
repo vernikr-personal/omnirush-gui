@@ -1199,6 +1199,10 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     // Oversized images are compressed at send time (see image-compression.ts)
     // so the chip appears instantly instead of blocking on canvas work here.
     props.onAttachFiles(inputFiles);
+    // The native file picker and the hidden file input take focus away from
+    // the Lexical prompt. Restore it after the chip/draft state is updated so
+    // Cmd/Ctrl+A continues to select the prompt rather than the whole window.
+    requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   const panelRoundedClass =

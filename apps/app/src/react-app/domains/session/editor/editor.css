@@ -28,6 +28,19 @@
 .omnirush-hunk-btn-primary:hover { background: color-mix(in srgb, var(--primary) 88%, black); }
 .omnirush-hunk-bar-busy { opacity: 0.55; pointer-events: none; }
 
+/* Search marks are scoped to the active document only; Mermaid and other code blocks are untouched. */
+.monaco-editor .omnirush-document-find-match,
+.markdown-content .omnirush-document-find-match {
+  background: rgba(250, 204, 21, 0.28);
+  border-radius: 2px;
+}
+.monaco-editor .omnirush-document-find-active,
+.markdown-content .omnirush-document-find-active {
+  background: rgba(250, 204, 21, 0.58);
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.55);
+  border-radius: 2px;
+}
+
 /* Git gutter (git-gutter.ts): added = solid bar, changed = striped bar, removed = wedge. Read-only: no pointer. */
 .monaco-editor .omnirush-gutter-add,
 .monaco-editor .omnirush-gutter-change {

@@ -32,6 +32,7 @@ import {
   TextNode,
   type EditorConfig,
   type NodeKey,
+  type LexicalEditor,
 } from "lexical";
 import type { InitialConfigType } from "@lexical/react/LexicalComposer.js";
 import { decodeComposerMentionValue, encodeComposerMentionValue, type ComposerMentionKind } from "./mention-encoding";
@@ -69,6 +70,7 @@ type EditorProps = {
 
 export type LexicalPromptEditorHandle = {
   insertSkillAtSelection: (skillName: string, skillToken?: string) => void;
+  focus: () => void;
   /** Voice dictation: marks the cursor with a live (dim) transcript placeholder. */
   voiceBegin: () => void;
   /** The dictated text so far, and whether more is still being transcribed. False once the placeholder is gone. */
@@ -467,6 +469,7 @@ function createAttachmentChipDom(attachment: ComposerAttachmentToken) {
   const dom = document.createElement("span");
   dom.className = "relative mx-0.5 inline-flex h-10 max-w-[140px] shrink-0 items-center align-middle";
   dom.contentEditable = "false";
+  dom.style.userSelect = "none";
   dom.setAttribute("spellcheck", "false");
   dom.title = attachment.name;
   dom.dataset.attachmentId = attachment.id;
@@ -1299,6 +1302,9 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
   const [editor] = useLexicalComposerContext();
 
   useImperativeHandle(props.editorRef, () => ({
+    focus() {
+      editor.focus();
+    },
     insertSkillAtSelection(skillName: string, skillToken?: string) {
       editor.update(() => insertSkillAtSelection(skillName, skillToken));
       editor.focus();
@@ -1326,6 +1332,33 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
       }, { discrete: true, tag: "history-merge" });
     },
   }), [editor]);
+
+  return null;
+}
+
+function selectAllPrompt(editor: LexicalEditor) {
+  editor.update(() => $getRoot().select(), { discrete: true });
+  editor.focus();
+}
+
+function PromptSelectAllPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const root = editor.getRootElement();
+    if (!root) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier || event.shiftKey || event.altKey || event.key.toLowerCase() !== "a") return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      selectAllPrompt(editor);
+    };
+    root.addEventListener("keydown", onKeyDown, true);
+    return () => root.removeEventListener("keydown", onKeyDown, true);
+  }, [editor]);
 
   return null;
 }
@@ -1425,6 +1458,7 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
             <ContentEditable
               className="min-h-[60px] max-h-[280px] w-full resize-none overflow-y-auto bg-transparent text-base leading-6 text-dls-text outline-none placeholder:text-dls-secondary lg:text-[13px] lg:leading-[1.55] [&_p]:min-h-[1.5rem] [&_p]:m-0"
               aria-placeholder={props.placeholder}
+              data-composer-prompt
               placeholder={<span />}
               onPaste={props.onPaste}
               onDrop={props.onDrop}
@@ -1451,6 +1485,7 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
         <PasteChipPlugin onPasteText={props.onPasteText} />
         <PastedTextExpandPlugin pastedText={props.pastedText} onExpandPastedText={props.onExpandPastedText} />
         <AttachmentRemovePlugin onRemoveAttachment={props.onRemoveAttachment} />
+        <PromptSelectAllPlugin />
         <MentionChipNavigationPlugin />
         <ImperativeHandlePlugin editorRef={ref} />
       </div>

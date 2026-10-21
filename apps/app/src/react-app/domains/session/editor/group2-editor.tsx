@@ -9,9 +9,12 @@ import type * as MonacoApi from "monaco-editor/editor/editor.api.js";
 import { monacoOptionsFor, useEditorSettings } from "./editor-settings";
 import type { AgentAction } from "./editor-surface";
 import { addGroupKeys, monacoThemeName, scopeEditor, type Monaco } from "./monaco";
+import { documentScrollKey, readDocumentScroll, saveDocumentScroll } from "./scroll-position";
 
 export function Group2Editor(props: {
   monaco: Monaco;
+  workspaceId: string;
+  stateKey: string | null;
   model: MonacoApi.editor.ITextModel | null;
   onSave: () => void;
   onFocus: () => void;
@@ -20,6 +23,7 @@ export function Group2Editor(props: {
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<MonacoApi.editor.IStandaloneCodeEditor | null>(null);
+  const currentStateKey = useRef<string | null>(null);
   const latest = useRef(props);
   latest.current = props;
 
@@ -41,8 +45,24 @@ export function Group2Editor(props: {
       theme: monacoThemeName(),
     });
     editorRef.current = editor;
+    let scrollSaveTimer: number | null = null;
+    const flushScroll = () => {
+      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = null;
+      const key = currentStateKey.current;
+      if (key) saveDocumentScroll(documentScrollKey(props.workspaceId, 2, key), {
+        top: editor.getScrollTop(),
+        left: editor.getScrollLeft(),
+      });
+    };
+    const scheduleScrollSave = () => {
+      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = window.setTimeout(flushScroll, 120);
+    };
     const disposables = [
+      editor.onDidScrollChange(scheduleScrollSave),
       editor.onDidFocusEditorWidget(() => latest.current.onFocus()),
+
       editor.onDidBlurEditorWidget(() => window.dispatchEvent(new Event("omnirush:editor-blur"))),
     ];
     // Keys scoped to this editor (Monaco shares keybindings between editors; see scopeEditor).
@@ -77,6 +97,7 @@ export function Group2Editor(props: {
     const unsubscribe = useEditorSettings.subscribe((settings) => editor.updateOptions(monacoOptionsFor(settings)));
     latest.current.onReady(editor);
     return () => {
+      flushScroll();
       latest.current.onReady(null);
       unsubscribe();
       for (const disposable of disposables) disposable.dispose();
@@ -84,12 +105,45 @@ export function Group2Editor(props: {
       editor.dispose();
       editorRef.current = null;
     };
-  }, [props.monaco]);
+  }, [props.monaco, props.workspaceId]);
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && editor.getModel() !== props.model) editor.setModel(props.model);
-  }, [props.model]);
+    if (!editor) return;
+    const changedDocument = currentStateKey.current !== props.stateKey;
+    if (changedDocument && currentStateKey.current) {
+      saveDocumentScroll(documentScrollKey(props.workspaceId, 2, currentStateKey.current), {
+        top: editor.getScrollTop(),
+        left: editor.getScrollLeft(),
+      });
+    }
+    if (editor.getModel() !== props.model) editor.setModel(props.model);
+    if (changedDocument) {
+      currentStateKey.current = props.stateKey;
+      const scroll = props.stateKey
+        ? readDocumentScroll(documentScrollKey(props.workspaceId, 2, props.stateKey))
+        : null;
+      if (props.stateKey) {
+        const key = props.stateKey;
+        requestAnimationFrame(() => {
+          if (currentStateKey.current !== key) return;
+          editor.setScrollTop(scroll?.top ?? 0);
+          editor.setScrollLeft(scroll?.left ?? 0);
+        });
+      }
+    }
+  }, [props.model, props.stateKey, props.workspaceId]);
 
-  return <div ref={hostRef} className="monaco-component min-h-0 flex-1" data-editor-group2-surface />;
+  return (
+    <div
+      ref={hostRef}
+      className="monaco-component min-h-0 flex-1"
+      data-editor-group2-surface
+      data-editor-document-surface
+      tabIndex={-1}
+      onPointerDownCapture={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.focus({ preventScroll: true });
+      }}
+    />
+  );
 }

@@ -13,6 +13,7 @@ import { addGroupKeys, applyMonacoTheme, monacoThemeName, scopeEditor, type Mona
 import type { FileDoc } from "./editor-models";
 import { hunkCounts, type LineHunk } from "./hunk-ops";
 import { monacoOptionsFor, useEditorSettings } from "./editor-settings";
+import { documentScrollKey, readDocumentScroll, saveDocumentScroll } from "./scroll-position";
 
 export type SurfaceDoc =
   | { kind: "file"; key: string; doc: FileDoc }
@@ -32,6 +33,7 @@ export type SurfaceDoc =
 
 type EditorSurfaceProps = {
   monaco: Monaco;
+  workspaceId: string;
   surface: SurfaceDoc | null;
   onSave: () => void;
   onCursor: (position: { line: number; column: number } | null) => void;
@@ -103,7 +105,7 @@ function hunkBar(
 
 const VIEW_STATES = new Map<string, MonacoApi.editor.ICodeEditorViewState | MonacoApi.editor.IDiffEditorViewState | null>();
 
-export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navigate, onAgentAction, onReady }: EditorSurfaceProps) {
+export function EditorSurface({ monaco, workspaceId, surface, onSave, onCursor, onHunks, navigate, onAgentAction, onReady }: EditorSurfaceProps) {
   const onAgentRef = useRef(onAgentAction);
   onAgentRef.current = onAgentAction;
   const onReadyRef = useRef(onReady);
@@ -160,7 +162,29 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
     const cursor = (editor: MonacoApi.editor.ICodeEditor) => editor.onDidChangeCursorPosition((event) => {
       onCursorRef.current({ line: event.position.lineNumber, column: event.position.column });
     });
-    const disposables = [cursor(code), cursor(diff.getModifiedEditor()), saveAction(code), saveAction(modified)];
+    const persistScroll = (key: string, editor: MonacoApi.editor.ICodeEditor) => {
+      saveDocumentScroll(documentScrollKey(workspaceId, 1, key), {
+        top: editor.getScrollTop(),
+        left: editor.getScrollLeft(),
+      });
+    };
+    let scrollSaveTimer: number | null = null;
+    const flushScroll = () => {
+      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = null;
+      const key = currentKey.current;
+      if (!key) return;
+      persistScroll(key, modeRef.current === "diff" ? diff.getModifiedEditor() : code);
+    };
+    const scheduleScrollSave = () => {
+      if (scrollSaveTimer !== null) window.clearTimeout(scrollSaveTimer);
+      scrollSaveTimer = window.setTimeout(flushScroll, 120);
+    };
+    const disposables = [
+      cursor(code), cursor(diff.getModifiedEditor()), saveAction(code), saveAction(modified),
+      code.onDidScrollChange(scheduleScrollSave),
+      diff.getModifiedEditor().onDidScrollChange(scheduleScrollSave),
+    ];
     // The agent in the editor: first in the right-click menu, and Cmd/Ctrl+L to ask. Monaco always sorts its
     // "navigation" group first, so the agent items join it with orders below Go to Definition (1.1).
     const agentActions = (editor: MonacoApi.editor.IStandaloneCodeEditor) => ([
@@ -211,6 +235,7 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
       diff.getOriginalEditor().render(true);
     });
     return () => {
+      flushScroll();
       const key = currentKey.current;
       if (key) VIEW_STATES.set(key, modeRef.current === "diff" ? diff.saveViewState() : code.saveViewState());
       onReadyRef.current?.(null);
@@ -222,7 +247,7 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
       codeRef.current = null;
       diffRef.current = null;
     };
-  }, [monaco]);
+  }, [monaco, workspaceId]);
 
   // Switching documents.
   useEffect(() => {
@@ -230,34 +255,70 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
     const diff = diffRef.current;
     if (!code || !diff) return;
     const previous = currentKey.current;
-    if (previous) {
-      viewStates.current.set(previous, mode === "diff" ? diff.saveViewState() : code.saveViewState());
+    const nextKey = surface?.key ?? null;
+    const changedDocument = previous !== nextKey;
+    if (previous && changedDocument) {
+      const previousEditor = modeRef.current === "diff" ? diff.getModifiedEditor() : code;
+      viewStates.current.set(previous, modeRef.current === "diff" ? diff.saveViewState() : code.saveViewState());
+      saveDocumentScroll(documentScrollKey(workspaceId, 1, previous), {
+        top: previousEditor.getScrollTop(),
+        left: previousEditor.getScrollLeft(),
+      });
     }
-    currentKey.current = surface?.key ?? null;
+    if (changedDocument) currentKey.current = nextKey;
     if (!surface) {
-      code.setModel(null);
+      if (code.getModel()) code.setModel(null);
       setMode(null);
       onCursorRef.current(null);
       onHunksRef.current([]);
       return;
     }
     if (surface.kind === "file") {
-      code.setModel(surface.doc.model);
+      if (code.getModel() !== surface.doc.model) code.setModel(surface.doc.model);
       code.updateOptions({ readOnly: false });
-      const state = viewStates.current.get(surface.key);
-      if (state) code.restoreViewState(state as MonacoApi.editor.ICodeEditorViewState);
+      if (changedDocument) {
+        const state = viewStates.current.get(surface.key);
+        if (state) code.restoreViewState(state as MonacoApi.editor.ICodeEditorViewState);
+        const scroll = state ? null : readDocumentScroll(documentScrollKey(workspaceId, 1, surface.key));
+        requestAnimationFrame(() => {
+          if (currentKey.current !== surface.key) return;
+          if (scroll) {
+            code.setScrollTop(scroll.top);
+            code.setScrollLeft(scroll.left);
+          } else if (!state) {
+            code.setScrollTop(0);
+            code.setScrollLeft(0);
+          }
+          code.focus();
+        });
+      }
       setMode("file");
       onHunksRef.current([]);
-      requestAnimationFrame(() => code.focus());
       return;
     }
-    diff.setModel({ original: surface.original, modified: surface.modified });
+    const currentDiff = diff.getModel();
+    if (currentDiff?.original !== surface.original || currentDiff?.modified !== surface.modified) {
+      diff.setModel({ original: surface.original, modified: surface.modified });
+    }
     diff.getModifiedEditor().updateOptions({ readOnly: Boolean(surface.readOnlyModified) });
-    const state = viewStates.current.get(surface.key);
-    if (state) diff.restoreViewState(state as MonacoApi.editor.IDiffEditorViewState);
+    if (changedDocument) {
+      const state = viewStates.current.get(surface.key);
+      if (state) diff.restoreViewState(state as MonacoApi.editor.IDiffEditorViewState);
+      const scroll = state ? null : readDocumentScroll(documentScrollKey(workspaceId, 1, surface.key));
+      requestAnimationFrame(() => {
+        if (currentKey.current !== surface.key) return;
+        if (scroll) {
+          diff.getModifiedEditor().setScrollTop(scroll.top);
+          diff.getModifiedEditor().setScrollLeft(scroll.left);
+        } else if (!state) {
+          diff.getModifiedEditor().setScrollTop(0);
+          diff.getModifiedEditor().setScrollLeft(0);
+        }
+      });
+    }
     setMode("diff");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [surface]);
+  }, [surface, workspaceId]);
 
   // Hunk bars (review tabs) and the hunk list, after every diff update.
   useEffect(() => {
@@ -385,7 +446,15 @@ export function EditorSurface({ monaco, surface, onSave, onCursor, onHunks, navi
   }, [navigate, mode]);
 
   return (
-    <div className="relative min-h-0 flex-1" data-editor-surface={mode ?? "empty"}>
+    <div
+      className="relative min-h-0 flex-1"
+      data-editor-surface={mode ?? "empty"}
+      data-editor-document-surface
+      tabIndex={-1}
+      onPointerDownCapture={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.focus({ preventScroll: true });
+      }}
+    >
       {/* display:none, not visibility: Monaco's layers set their own visibility and would show through. */}
       <div ref={codeHostRef} className="monaco-component absolute inset-0" style={{ display: mode === "file" ? "block" : "none" }} />
       <div ref={diffHostRef} className="monaco-component absolute inset-0" style={{ display: mode === "diff" ? "block" : "none" }} />
