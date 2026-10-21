@@ -1,12 +1,11 @@
-// tsc emits only TypeScript: the plain-JavaScript modules shared with the CLI
-// (src/workspace/*.mjs, src/computer-use/shared/*.mjs and src/provider-lock/*.mjs, see PARITY.sha256 there) are
-// copied into dist as they are.
+// tsc emits only TypeScript: plain-JavaScript modules required at runtime
+// (workspace, computer-use/shared, provider-lock, and box) are copied into dist.
 import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const copied = [];
-for (const folder of ["workspace", "computer-use/shared", "provider-lock"]) {
+for (const folder of ["workspace", "computer-use/shared", "provider-lock", "box"]) {
   const from = join(root, "src", folder);
   const to = join(root, "dist", folder);
   mkdirSync(to, { recursive: true });

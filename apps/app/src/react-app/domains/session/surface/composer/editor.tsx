@@ -31,6 +31,7 @@ import {
   type Spread,
   TextNode,
   type EditorConfig,
+  type LexicalEditor,
   type NodeKey,
 } from "lexical";
 import type { InitialConfigType } from "@lexical/react/LexicalComposer.js";
@@ -68,6 +69,7 @@ type EditorProps = {
 };
 
 export type LexicalPromptEditorHandle = {
+  focus: () => void;
   insertSkillAtSelection: (skillName: string, skillToken?: string) => void;
   /** Voice dictation: marks the cursor with a live (dim) transcript placeholder. */
   voiceBegin: () => void;
@@ -1299,6 +1301,9 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
   const [editor] = useLexicalComposerContext();
 
   useImperativeHandle(props.editorRef, () => ({
+    focus() {
+      editor.focus();
+    },
     insertSkillAtSelection(skillName: string, skillToken?: string) {
       editor.update(() => insertSkillAtSelection(skillName, skillToken));
       editor.focus();
@@ -1326,6 +1331,58 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
       }, { discrete: true, tag: "history-merge" });
     },
   }), [editor]);
+
+  return null;
+}
+
+function selectAllPrompt(editor: LexicalEditor) {
+  const root = editor.getRootElement();
+  if (!root) return;
+  // Set both Lexical's model selection and the DOM range. Electron's native
+  // menu and the keyboard shortcut then select the same prompt contents.
+  root.focus({ preventScroll: true });
+  editor.update(() => $getRoot().select(), { discrete: true });
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function PromptSelectAllPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const root = editor.getRootElement();
+    if (!root) return;
+    const composerRoot = root.closest<HTMLElement>("[data-composer-root]") ?? root;
+    const shouldSelectPrompt = (target: EventTarget | null) => {
+      const candidates = [
+        target instanceof Element ? target : null,
+        document.activeElement instanceof Element ? document.activeElement : null,
+      ].filter((candidate): candidate is Element => candidate !== null);
+      const insidePrompt = candidates.some((candidate) => root.contains(candidate));
+      const insideComposer = candidates.some((candidate) => composerRoot.contains(candidate));
+      const focusedOtherEditor = candidates.some((candidate) => {
+        const editorTarget = candidate.closest("input:not([type='file']), textarea, [contenteditable='true']");
+        return editorTarget !== null && !root.contains(editorTarget);
+      });
+      return insidePrompt || (insideComposer && !focusedOtherEditor);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
+      const modifier = isMac ? event.metaKey : event.ctrlKey;
+      if (!modifier || event.shiftKey || event.altKey || event.key.toLowerCase() !== "a") return;
+      if (!shouldSelectPrompt(event.target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      selectAllPrompt(editor);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [editor]);
 
   return null;
 }
@@ -1451,6 +1508,7 @@ export const LexicalPromptEditor = forwardRef<LexicalPromptEditorHandle, EditorP
         <PasteChipPlugin onPasteText={props.onPasteText} />
         <PastedTextExpandPlugin pastedText={props.pastedText} onExpandPastedText={props.onExpandPastedText} />
         <AttachmentRemovePlugin onRemoveAttachment={props.onRemoveAttachment} />
+        <PromptSelectAllPlugin />
         <MentionChipNavigationPlugin />
         <ImperativeHandlePlugin editorRef={ref} />
       </div>
