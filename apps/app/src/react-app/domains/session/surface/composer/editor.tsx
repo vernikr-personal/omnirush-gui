@@ -469,6 +469,8 @@ function createAttachmentChipDom(attachment: ComposerAttachmentToken) {
   const dom = document.createElement("span");
   dom.className = "relative mx-0.5 inline-flex h-10 max-w-[140px] shrink-0 items-center align-middle";
   dom.contentEditable = "false";
+  dom.style.setProperty("user-select", "none");
+  dom.style.setProperty("-webkit-user-select", "none");
   dom.setAttribute("spellcheck", "false");
   dom.title = attachment.name;
   dom.dataset.attachmentId = attachment.id;
@@ -1338,15 +1340,38 @@ function ImperativeHandlePlugin(props: { editorRef: ForwardedRef<LexicalPromptEd
 function selectAllPrompt(editor: LexicalEditor) {
   const root = editor.getRootElement();
   if (!root) return;
-  // Set both Lexical's model selection and the DOM range. Electron's native
-  // menu and the keyboard shortcut then select the same prompt contents.
   root.focus({ preventScroll: true });
-  editor.update(() => $getRoot().select(), { discrete: true });
+  editor.update(() => {
+    const textNodes = $getRoot().getAllTextNodes().filter((node) => !(node instanceof ComposerAttachmentNode));
+    const first = textNodes[0];
+    const last = textNodes.at(-1);
+    if (!first || !last) {
+      $setSelection(null);
+      return;
+    }
+    const lexicalSelection = $createRangeSelection();
+    lexicalSelection.anchor.set(first.getKey(), 0, "text");
+    lexicalSelection.focus.set(last.getKey(), last.getTextContentSize(), "text");
+    $setSelection(lexicalSelection);
+  }, { discrete: true });
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      return node.textContent && !node.parentElement?.closest("[data-attachment-id]")
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const first = walker.nextNode() as Text | null;
+  let last = first;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) last = node as Text;
   const selection = window.getSelection();
   if (!selection) return;
-  const range = document.createRange();
-  range.selectNodeContents(root);
   selection.removeAllRanges();
+  if (!first || !last) return;
+  const range = document.createRange();
+  range.setStart(first, 0);
+  range.setEnd(last, last.length);
   selection.addRange(range);
 }
 

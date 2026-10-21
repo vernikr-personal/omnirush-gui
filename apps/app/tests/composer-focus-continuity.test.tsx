@@ -502,6 +502,8 @@ test("composer focus and optimistic sends preserve drafts through snapshots and 
       editor.dispatchEvent(new KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true, cancelable: true }));
     });
     expect(window.getSelection()?.toString()).toContain("First hero message");
+    expect(window.getSelection()?.toString()).not.toContain("photo.png");
+    expect(container.querySelector<HTMLElement>("[data-attachment-id]")?.style.getPropertyValue("user-select")).toBe("none");
     await act(async () => send());
     expect(creations).toBe(2);
     expect(container.querySelector('[data-lexical-editor="true"]')?.textContent).toContain("First hero message");

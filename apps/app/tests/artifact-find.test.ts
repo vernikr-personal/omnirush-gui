@@ -1,10 +1,35 @@
 import { expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { findMatchOffsets, findTextRanges } from "../src/react-app/domains/session/artifacts/artifact-find";
+import { captureArtifactFindShortcut, findMatchOffsets, findTextRanges } from "../src/react-app/domains/session/artifacts/artifact-find";
 
 if (typeof globalThis.window === "undefined" || typeof globalThis.document === "undefined") {
   GlobalRegistrator.register({ url: "http://localhost/" });
 }
+
+test("Find in the focused artifact panel preempts the chat Find shortcut", () => {
+  const panel = document.createElement("div");
+  panel.dataset.artifactPanel = "";
+  const target = document.createElement("button");
+  panel.append(target);
+  document.body.append(panel);
+  let artifactOpens = 0;
+  let chatOpens = 0;
+  const artifactShortcut = (event: KeyboardEvent) => {
+    captureArtifactFindShortcut(event, panel, true, () => { artifactOpens += 1; });
+  };
+  const chatShortcut = () => { chatOpens += 1; };
+  window.addEventListener("keydown", artifactShortcut, true);
+  window.addEventListener("keydown", chatShortcut);
+  try {
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "f", metaKey: true, bubbles: true, cancelable: true }));
+    expect(artifactOpens).toBe(1);
+    expect(chatOpens).toBe(0);
+  } finally {
+    window.removeEventListener("keydown", artifactShortcut, true);
+    window.removeEventListener("keydown", chatShortcut);
+    panel.remove();
+  }
+});
 
 test("finds case-insensitive occurrences and reports their offsets", () => {
   expect(findMatchOffsets("Intro TARGET, target. end", "target")).toEqual([

@@ -1,3 +1,40 @@
+diff --git a/apps/app/src/components/chat/reasoning-block.tsx b/apps/app/src/components/chat/reasoning-block.tsx
+index fd4ddec8..ab0391c5 100644
+--- a/apps/app/src/components/chat/reasoning-block.tsx
++++ b/apps/app/src/components/chat/reasoning-block.tsx
+@@ -23,7 +23,7 @@ type ReasoningBlockProps = {
+  * when the user opens it.
+  */
+ export function ReasoningBlock({ text, isStreaming, className }: ReasoningBlockProps) {
+-  const [open, setOpen] = useState(true)
++  const [open, setOpen] = useState(false)
+ 
+   return (
+     <Collapsible open={open} onOpenChange={setOpen} className={cn("w-full", className)} data-reasoning-block="">
+@@ -37,13 +37,16 @@ export function ReasoningBlock({ text, isStreaming, className }: ReasoningBlockP
+         />
+       </CollapsibleTrigger>
+       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
+-        <MessageContent
+-          markdown
+-          isStreaming={isStreaming}
+-          className="text-muted-foreground prose mt-1 w-full min-w-0 rounded-lg bg-transparent p-0 text-sm"
+-        >
+-          {text}
+-        </MessageContent>
++        {open ? (
++          <MessageContent
++            markdown
++            isStreaming={isStreaming}
++            data-reasoning-trace-content=""
++            className="text-muted-foreground prose mt-1 w-full min-w-0 rounded-lg bg-transparent p-0 text-sm"
++          >
++            {text}
++          </MessageContent>
++        ) : null}
+       </CollapsibleContent>
+     </Collapsible>
+   )
 diff --git a/apps/app/src/components/markdown/markdown-primitive.ts b/apps/app/src/components/markdown/markdown-primitive.ts
 index 00858afa..0d1f5b27 100644
 --- a/apps/app/src/components/markdown/markdown-primitive.ts
@@ -319,3 +356,69 @@ index 00000000..357dc5b5
 +   `ELECTRON_ENABLE_LOGGING=1` plus Chrome DevTools (Performance panel, port
 +   9223–9227) shows `Recalculate Style`, `Layout`, `marked` lexer frames and the
 +   GPU process' `Compositing` rows.
+diff --git a/evals/specs/streamed-markdown-answer.e2e.test.ts b/evals/specs/streamed-markdown-answer.e2e.test.ts
+index 74c644bb..93d53bfd 100644
+--- a/evals/specs/streamed-markdown-answer.e2e.test.ts
++++ b/evals/specs/streamed-markdown-answer.e2e.test.ts
+@@ -21,6 +21,7 @@ const blockSentinels = [
+ const rawSyntax = ["## Streamed", "**bold emphasis**", "`inline-code.ts`", "- alpha", "| gamma row", "```"];
+ 
+ const occurrences = (haystack: string, needle: string) => haystack.split(needle).length - 1;
++const reasoningControl = { role: "button", label: /^(Thinking…|Thought|Reasoning trace…|Reasoning trace)$/ } as const;
+ 
+ function expectSettledDocument(visibleText: string) {
+   for (const sentinel of blockSentinels) expect(occurrences(visibleText, sentinel)).toBe(1);
+@@ -69,20 +70,28 @@ test("a streaming answer renders as markdown block by block and settles to the s
+ 
+   await step("finished blocks render as markdown while later blocks are still arriving", async () => {
+     await user.see({ text: headingText }, { timeoutMs: 90_000 });
++    await user.see({ text: "Writing a response" });
+     await user.notSee({ text: closingText });
+     await user.notSee({ text: "## Streamed" });
+     await user.notSee({ text: streamedMarkdownReasoning });
++    expect(await probe.eval(() => {
++      const status = document.querySelector<HTMLElement>('[data-testid="session-run-status"]');
++      const composer = document.querySelector<HTMLElement>("[data-composer-panel]");
++      return Boolean(status && composer && Math.abs(status.getBoundingClientRect().width - composer.getBoundingClientRect().width) < 2);
++    })).toBe(true);
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(0);
+   });
+ 
+   await step("live reasoning can be inspected before any reload while the answer is still streaming", async () => {
+-    const reasoningControl = { role: "button", label: /^(Thinking…|Thought)$/ } as const;
+     await user.see(reasoningControl);
+     await user.click(reasoningControl);
+     await user.see({ text: streamedMarkdownReasoning });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(1);
+     expect(occurrences(await probe.text(), streamedMarkdownReasoning)).toBe(1);
+     await user.notSee({ text: closingText });
+     await user.click(reasoningControl);
+     await user.notSee({ text: streamedMarkdownReasoning });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(0);
+   });
+ 
+   await step("sent text and finished blocks stay visible before reloading the active stream", async () => {
+@@ -106,8 +115,10 @@ test("a streaming answer renders as markdown block by block and settles to the s
+   });
+ 
+   await step("the settled reasoning is collapsed and can be inspected separately", async () => {
+-    await user.click({ role: "button", label: "Thought" });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(0);
++    await user.click(reasoningControl);
+     await user.see({ text: streamedMarkdownReasoning });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(1);
+     expect(occurrences(await probe.text(), streamedMarkdownReasoning)).toBe(1);
+     expectSettledDocument(await probe.text());
+   });
+@@ -149,8 +160,10 @@ test("a streaming answer renders as markdown block by block and settles to the s
+   });
+ 
+   await step("reloaded reasoning stays collapsed until inspected separately", async () => {
+-    await user.click({ role: "button", label: "Thought" });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(0);
++    await user.click(reasoningControl);
+     await user.see({ text: streamedMarkdownReasoning });
++    expect((await probe.dom("[data-reasoning-trace-content]")).elements).toHaveLength(1);
+     expect(occurrences(await probe.text(), streamedMarkdownReasoning)).toBe(1);
+     expectSettledDocument(await probe.text());
+   });

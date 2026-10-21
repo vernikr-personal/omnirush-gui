@@ -9,7 +9,7 @@ export const PATCH_GROUPS = [
   {
     file: "0001-port-kit.patch",
     title: "the port kit: fork/ scripts, patches and the sync workflow",
-    paths: ["fork", ".github/workflows/fork-sync.yml"],
+    paths: ["fork", ":(exclude)fork/patches/0001-port-kit.patch", ".github/workflows/fork-sync.yml"],
     addsOnly: true,
   },
   {
@@ -49,9 +49,8 @@ export const PATCH_GROUPS = [
       "apps/app/src/components/chat/reasoning-block.tsx",
       "apps/app/src/components/markdown",
       "apps/app/src/react-app/domains/session/status/session-progress.ts",
-      "apps/app/tests/reasoning-block-collapsed.test.tsx",
-      "apps/app/tests/session-progress-fingerprint.test.ts",
       "docs/intel-mac-performance.md",
+      "evals/specs/streamed-markdown-answer.e2e.test.ts",
     ],
     addsOnly: false,
   },
@@ -93,10 +92,18 @@ export const PATCH_GROUPS = [
       "apps/app/tests/editor-scroll-position.test.ts",
       "apps/app/tests/composer-focus-continuity.test.tsx",
       "apps/app/tests/artifact-find.test.ts",
+      "evals/specs/artifact-code-browser.e2e.test.ts",
+      "evals/specs/attachment-upload-loading-state.e2e.test.ts",
       "apps/server/scripts/copy-shared-modules.mjs",
       "apps/desktop/electron/app-menu.mjs",
       "apps/desktop/electron/preload.mjs",
     ],
+    addsOnly: false,
+  },
+  {
+    file: "0010-upstream-compatibility.patch",
+    title: "fork registry and upstream compatibility guidance",
+    paths: ["AGENTS.md", "FORK_DIFFS.md"],
     addsOnly: false,
   },
 ];

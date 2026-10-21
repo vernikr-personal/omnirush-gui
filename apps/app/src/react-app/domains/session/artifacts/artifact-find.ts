@@ -1,5 +1,20 @@
 export type TextMatch = { start: number; end: number };
 
+export function captureArtifactFindShortcut(
+  event: KeyboardEvent,
+  panel: HTMLElement,
+  isMac: boolean,
+  openFind: () => void,
+): boolean {
+  const modifier = isMac ? event.metaKey : event.ctrlKey;
+  if (!modifier || event.shiftKey || event.altKey || event.key.toLowerCase() !== "f") return false;
+  if (!(event.target instanceof Node) || !panel.contains(event.target)) return false;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  openFind();
+  return true;
+}
+
 export function findMatchOffsets(text: string, query: string): TextMatch[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];

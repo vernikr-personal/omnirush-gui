@@ -16,7 +16,7 @@ import { toast } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePlatform } from "@/react-app/kernel/platform";
 import { type ArtifactPanelTab, usePanelTabStore } from "../panel/panel-tab-store";
-import { clearArtifactFindHighlights, findTextRanges, setArtifactFindHighlights } from "./artifact-find";
+import { captureArtifactFindShortcut, clearArtifactFindHighlights, findTextRanges, setArtifactFindHighlights } from "./artifact-find";
 import "./artifact-panel.css";
 import { isCollectibleArtifactTarget, openTargetFromWorkspaceFile, type BinaryData, type Data, type OpenTarget, type TextData } from "./open-target";
 import { HTMLPreview, ImagePreview, MarkdownPreview, PdfPreview, PlainText, PreviewError, PreviewLoading, PreviewUnavailable } from "./preview";
@@ -297,13 +297,9 @@ function ArtifactPanelView({ sessionId, client, workspaceId, workspaceRoot, isRe
     }
 
     const handleFindShortcut = (event: KeyboardEvent) => {
-      const modifier = platform.os === "macos" ? event.metaKey : event.ctrlKey;
-      const panel = previewContentRef.current?.closest("[data-artifact-panel]");
-      if (!modifier || event.key.toLowerCase() !== "f" || event.shiftKey || event.altKey || !panel) return;
-      if (!(event.target instanceof Node) || !panel.contains(event.target)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setFindOpen(true);
+      const panel = previewContentRef.current?.closest<HTMLElement>("[data-artifact-panel]");
+      if (!panel) return;
+      captureArtifactFindShortcut(event, panel, platform.os === "macos", () => setFindOpen(true));
     };
 
     window.addEventListener("keydown", handleFindShortcut, true);
