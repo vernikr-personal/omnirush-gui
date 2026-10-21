@@ -16,7 +16,7 @@
   </p>
   <p>
     <a href="https://github.com/omnirush-ai/omnirush-gui/releases/latest"><img src="https://img.shields.io/github/v/release/omnirush-ai/omnirush-gui?label=latest&color=f97316" alt="Latest release" /></a>
-    <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple" alt="macOS" />
+    <img src="https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-black?logo=apple" alt="macOS" />
     <img src="https://img.shields.io/badge/Linux-x64%20%7C%20arm64-FCC624?logo=linux&logoColor=black" alt="Linux" />
     <a href="https://github.com/omnirush-ai/omnirush-gui/stargazers"><img src="https://img.shields.io/github/stars/omnirush-ai/omnirush-gui?style=social" alt="Stars" /></a>
   </p>
@@ -35,6 +35,12 @@ omnirush.ai is a desktop app for working with a coding agent on your own
 projects. GPT 6 Astra is the default model; GPT 6.1 Sol and the other models in
 your account's catalog are available from the model picker.
 
+## Why this fork
+
+The official release covers Apple Silicon Macs only — this fork keeps the same app installable on Intel Macs, so nobody has to replace working hardware to use it.
+
+Long agent runs stay cheap on those machines too: since 3.6.2 the Mac stays responsive and cool while the model is thinking, instead of being tied up for the whole run.
+
 ## Download
 
 Download the latest build from the
@@ -44,6 +50,7 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
 | Platform | File |
 | --- | --- |
 | macOS, Apple Silicon | `omnirush-mac-arm64-<version>.dmg` (a `.zip` is also attached) |
+| macOS, Intel | `omnirush-mac-x64-<version>.dmg` (a `.zip` is also attached) |
 | Linux x64, Debian/Ubuntu | `omnirush-linux-amd64-<version>.deb` |
 | Linux x64, Arch | `omnirush-linux-x64-<version>.pacman` |
 | Linux x64, Fedora/RHEL | `omnirush-linux-x86_64-<version>.rpm` |
@@ -53,8 +60,9 @@ File names include the version, for example `omnirush-mac-arm64-3.0.1.dmg`.
 | Linux arm64, Fedora/RHEL | `omnirush-linux-aarch64-<version>.rpm` |
 | Linux arm64, other | `omnirush-linux-arm64-<version>.AppImage` or `omnirush-linux-arm64-<version>.tar.gz` |
 
-Each release includes `SHA256SUMS.txt` for verifying downloads. There is no
-build for Intel Macs.
+Each release includes `SHA256SUMS.txt` for verifying downloads. Unlike
+upstream, this fork also builds for Intel Macs; both macOS architectures are
+ad-hoc signed, so neither is notarized.
 
 ## First launch
 

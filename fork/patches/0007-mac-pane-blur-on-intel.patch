@@ -1,0 +1,84 @@
+diff --git a/apps/app/src/app/index.css b/apps/app/src/app/index.css
+index 514d5b2..bad3802 100644
+--- a/apps/app/src/app/index.css
++++ b/apps/app/src/app/index.css
+@@ -207,6 +207,11 @@ body {
+   -moz-osx-font-smoothing: grayscale;
+ }
+ 
++.markdown-content [data-omnirush-code-block] {
++  background-color: var(--omnirush-code-bg, var(--gray-2, var(--dls-surface)));
++  color: var(--omnirush-code-fg, var(--dls-text-primary));
++}
++
+ .markdown-content [data-omnirush-code-block] pre {
+   margin: 0;
+   background: transparent !important;
+@@ -234,8 +239,8 @@ body {
+ }
+ 
+ /* Theme presets and custom themes (html[data-omnirush-palette], set by app/theme.ts):
+-   chat code blocks use the theme's code background and syntax colours. Shiki
+-   writes GitHub colours inline; each one maps to its syntax role. */
++   chat and document-preview code blocks use the theme's code background and
++   syntax colours. Shiki writes GitHub colours inline; each one maps to its syntax role. */
+ html[data-omnirush-palette] .markdown-content [data-omnirush-code-block] {
+   background-color: var(--omnirush-code-bg);
+   color: var(--omnirush-code-fg);
+@@ -578,6 +583,34 @@ select:disabled {
+   }
+ }
+ 
++/* Marker on the two session panes (`chat/session-page.tsx`); the blur itself
++   comes from their `mac:backdrop-blur-2xl mac:backdrop-saturate-150` classes.
++
++   That pane is the app's only window-sized backdrop filter, and the macOS
++   window is transparent (`backgroundColor: #00000001`) with a vibrancy
++   material behind it. So the backdrop is not another layer of ours: Chromium
++   has to sample the native material and run the filter every time the pane is
++   recomposited, and the pane is recomposited for as long as anything inside it
++   animates — the working shimmer, the paused dots, streaming text. On Apple
++   Silicon that is invisible; on Intel the pass is the most expensive frame
++   work the app does and lands in the GPU process as CPU time for the whole
++   duration of a run. Intel builds of this fork skip the filter (the 15% of
++   vibrancy the pane lets through is a smooth material already — nothing
++   readable changes), and every build honours the system "Reduce transparency"
++   setting, which is the one-switch way to take it out everywhere. */
++@media (prefers-reduced-transparency: reduce) {
++  .ow-pane-blur {
++    background-color: var(--dls-surface);
++    -webkit-backdrop-filter: none;
++    backdrop-filter: none;
++  }
++}
++
++html.omnirush-electron.omnirush-platform-mac-intel .ow-pane-blur {
++  -webkit-backdrop-filter: none;
++  backdrop-filter: none;
++}
++
+ /* Quiet, small dot ticker (`:: :: ::`). Each dot pulses briefly in sequence,
+    illuminating left-to-right like a subtle running light. Used for boot,
+    "awaiting first token", and any idle-but-alive hint. */
+diff --git a/apps/app/src/react-app/domains/session/chat/session-page.tsx b/apps/app/src/react-app/domains/session/chat/session-page.tsx
+index 45cefa8..fab7758 100644
+--- a/apps/app/src/react-app/domains/session/chat/session-page.tsx
++++ b/apps/app/src/react-app/domains/session/chat/session-page.tsx
+@@ -1505,7 +1505,7 @@ export function SessionPage(props: SessionPageProps) {
+ 
+   // The chat itself: beside the sessions sidebar in Chat mode, docked on the right in IDE mode.
+   const chatPane = (
+-              <main data-session-pane className="@container/chatpane flex h-full min-w-0 flex-col overflow-hidden bg-dls-surface max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
++              <main data-session-pane className="ow-pane-blur @container/chatpane flex h-full min-w-0 flex-col overflow-hidden bg-dls-surface max-lg:rounded-none max-lg:border-0 max-lg:shadow-none lg:rounded-[14px] lg:border lg:border-border lg:shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:lg:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+           {/* The pane `<main>` above already carries the macOS vibrancy blur. A
+               second backdrop filter on the header (or on the transcript surface
+               below) is invisible — nothing scrolls beneath either — but each
+@@ -2317,7 +2317,7 @@ export function SessionPage(props: SessionPageProps) {
+                   maxSize="70%"
+                   className="min-h-0 overflow-hidden pl-2 lg:flex lg:flex-col"
+                 >
+-                  <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-dls-surface shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
++                  <div className="ow-pane-blur flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-dls-surface shadow-[0_8px_24px_rgba(15,23,42,0.06)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
+                     {sidePanelContent}
+                   </div>
+                 </ResizablePanel>
