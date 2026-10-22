@@ -8,3 +8,4 @@ Compared with `omnirush-ai/omnirush-gui`:
 - Find in artifact previews; prompt Select All excludes attachment chips; editor scroll position is preserved.
 - Markdown code blocks follow dark/custom themes; desktop cleanup uses fork retention policy.
 - Internal links are clickable in artifact previews: `#anchor` scrolls the document, a relative link opens the file in the panel.
+- Pasted links show theme-aware favicons (variant A): `github.com` uses `github.githubassets.com/favicons/favicon(-dark).png` with live dark/light switch and no white square; other hosts use `icon.horse/icon/<host>` which preserves transparency (unlike Google S2).

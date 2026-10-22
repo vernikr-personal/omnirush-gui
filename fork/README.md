@@ -100,6 +100,9 @@ sync fetches that commit so `--3way` has the blobs it needs.
 | `0006-thinking-stream-render-cost.patch` | keep markdown rendering responsive during long runs | when upstream edits those files |
 | `0007-mac-pane-blur-on-intel.patch` | reduce Intel Mac GPU load while streaming | when upstream edits those files |
 | `0008-surface-markdown-dark-theme.patch` | Markdown preview code blocks follow dark/custom themes | when upstream edits markdown rendering or theme CSS |
+| `0009-editor-scroll-find-select-all.patch` | Find in artifact previews; prompt Select All excludes attachment chips; editor scroll is preserved | when upstream edits those files |
+| `0010-upstream-compatibility.patch` | Upstream compatibility shims | when upstream edits those files |
+| `0011-github-favicon-theme.patch` | Pasted links show theme-aware favicons (variant A): GitHub dark/light via `github.githubassets.com`, others via `icon.horse` — no white square, live sync | when upstream edits `apps/app/src/lib/favicon.ts` or `markdown-primitive.ts` |
 
 ## Secrets
 

@@ -13,7 +13,7 @@ import {
 } from "@shikijs/transformers";
 import { bundledLanguages, codeToHtml } from "shiki";
 
-import { faviconUrlForHref } from "@/lib/favicon";
+import { faviconUrlForHref, isGitHubHost } from "@/lib/favicon";
 
 import { markdownMath } from "./markdown-math";
 
@@ -275,6 +275,7 @@ function sanitizeMarkdownHtml(value: string) {
       "data-omnirush-inline-code-path",
       "data-omnirush-link-href",
       "data-omnirush-link-chevron",
+      "data-omnirush-favicon",
       "data-omnirush-shiki",
       "decoding",
       "disabled",
@@ -361,8 +362,12 @@ function renderLink(profile: MarkdownProfile, href: string, title: string | null
     }
 
     const favicon = faviconUrlForHref(href);
+    let faviconAttr = "";
+    try {
+      if (isGitHubHost(new URL(href).hostname)) faviconAttr = ' data-omnirush-favicon="github"';
+    } catch {}
     const faviconHtml = favicon
-      ? `<img src="${escapeAttribute(favicon)}" alt="" aria-hidden="true" loading="lazy" decoding="async" class="me-1 inline-block size-3.5 rounded-[3px] align-[-2px]" />`
+      ? `<img src="${escapeAttribute(favicon)}" alt="" aria-hidden="true" loading="lazy" decoding="async" class="me-1 inline-block size-3.5 rounded-[3px] align-[-2px]"${faviconAttr} />`
       : "";
 
     return `<a href="${safe}" data-omnirush-link-href="${originalHref}"${titleAttr} target="_blank" rel="noreferrer noopener" class="text-[var(--omnirush-link,var(--indigo-10))] no-underline transition-colors hover:text-[var(--omnirush-link-hover,var(--indigo-8))]">${faviconHtml}${text}</a>`;

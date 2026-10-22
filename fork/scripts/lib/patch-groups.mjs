@@ -108,6 +108,15 @@ export const PATCH_GROUPS = [
     paths: ["AGENTS.md", "FORK_DIFFS.md"],
     addsOnly: false,
   },
+  {
+    file: "0011-github-favicon-theme.patch",
+    title: "pasted links show theme-aware favicons (variant A)",
+    paths: [
+      "apps/app/src/lib/favicon.ts",
+      "apps/app/src/components/markdown/markdown-primitive.ts",
+    ],
+    addsOnly: false,
+  },
 ];
 
 /** Paths no group may touch: the engine tarballs are pinned in upstream releases. */
